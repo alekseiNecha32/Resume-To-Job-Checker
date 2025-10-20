@@ -1,0 +1,105 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* === Your HSL design tokens === */
+@layer base {
+  :root {
+    --background: 220 25% 97%;
+    --foreground: 220 20% 15%;
+    --card: 0 0% 100%;
+    --card-foreground: 220 20% 15%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 20% 15%;
+    --primary: 217 91% 60%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 15% 95%;
+    --secondary-foreground: 220 20% 15%;
+    --muted: 220 15% 95%;
+    --muted-foreground: 220 10% 45%;
+    --accent: 217 91% 60%;
+    --accent-foreground: 0 0% 100%;
+    --success: 142 71% 45%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 217 91% 60%;
+    --radius: 0.75rem;
+    --gradient-primary: linear-gradient(135deg, hsl(346, 83%, 32%), hsl(230 89% 65%));
+    --gradient-success: linear-gradient(135deg, hsl(142 71% 45%), hsl(158 64% 52%));
+    --gradient-warning: linear-gradient(135deg, hsl(38 92% 50%), hsl(45 93% 47%));
+    --gradient-danger: linear-gradient(135deg, hsl(0 84% 60%), hsl(348 83% 47%));
+    --shadow-card: 0 2px 8px -2px hsl(220 20% 15% / 0.1);
+    --shadow-elevated: 0 8px 24px -4px hsl(220 20% 15% / 0.15);
+    --glass-bg: 0 0% 100% / 0.7;
+    --glass-border: 0 0% 100% / 0.2;
+  }
+  .dark {
+    --background: 220 25% 8%;
+    --foreground: 220 15% 95%;
+    --card: 220 20% 12%;
+    --card-foreground: 220 15% 95%;
+    --popover: 220 20% 12%;
+    --popover-foreground: 220 15% 95%;
+    --primary: 217 91% 60%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 15% 18%;
+    --secondary-foreground: 220 15% 95%;
+    --muted: 220 15% 18%;
+    --muted-foreground: 220 10% 55%;
+    --accent: 217 91% 60%;
+    --accent-foreground: 0 0% 100%;
+    --success: 142 71% 45%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 15% 20%;
+    --input: 220 15% 20%;
+    --ring: 217 91% 60%;
+    --shadow-card: 0 2px 8px -2px hsl(0 0% 0% / 0.3);
+    --shadow-elevated: 0 8px 24px -4px hsl(0 0% 0% / 0.4);
+    --glass-bg: 220 20% 12% / 0.7;
+    --glass-border: 0 0% 100% / 0.1;
+  }
+
+
+  * { @apply border-border; }
+  body { @apply bg-background text-foreground; }
+}
+
+@layer components {
+  .dropzone {
+    @apply rounded-2xl border-2 border-dashed border-border/70 bg-white/60 dark:bg-white/5
+           hover:border-primary/60 transition-colors grid place-items-center text-center p-6;
+    backdrop-filter: blur(6px);
+  }
+}
+
+@layer components {
+  .glass-card {
+    background: linear-gradient(135deg, rgba(255,255,255,0.14), rgba(255,255,255,0.06));
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    @apply rounded-2xl border border-border shadow-elevated;
+  }
+  .dark .glass-card {
+    background: linear-gradient(135deg, rgba(24, 130, 50, 0.1), rgba(255,255,255,0.04));
+  }
+
+  .glass-input {
+    @apply w-full rounded-xl bg-white/60 dark:bg-white/5 border border-border px-3 py-2
+           focus:outline-none focus:ring-2 focus:ring-ring placeholder:text-muted-foreground;
+    backdrop-filter: blur(6px);
+  }
+
+  .glass-button {
+    @apply inline-flex items-center justify-center rounded-xl border border-border px-4 py-2
+           transition hover:bg-primary hover:text-primary-foreground focus:outline-none focus:ring-2 focus:ring-ring;
+  }
+}
