@@ -14,8 +14,8 @@ export default function ResultCard({ data }) {
   // Simple color badge like you had
   const color =
     score >= 80 ? "#059669" :   // green
-    score >= 60 ? "#d97706" :   // amber
-                  "#b91c1c";    // red
+      score >= 60 ? "#d97706" :   // amber
+        "#b91c1c";    // red
 
   return (
     <div className="glass-card p-5 mt-6">
@@ -30,6 +30,9 @@ export default function ResultCard({ data }) {
       {matched.length > 0 && (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginTop: 14 }}>
           <div>
+            <p className="mt-2 text-sm text-muted-foreground">
+              {matched.length} matched keywords • {data.score}% overall match
+            </p>
             <h3 style={{ color: "#065f46", fontWeight: 700, marginBottom: 8 }}>Matched Keywords</h3>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
               {matched.map((k, i) => (
