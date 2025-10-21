@@ -137,9 +137,9 @@ export default function Analyze() {
         {/* Action */}
         <div className="mt-8 flex justify-center">
           <button
-            className={`glass-button px-6 py-2 [background-image:var(--gradient-primary)] text-primary-foreground
-                        hover:brightness-105 active:scale-[.99]
-                        ${(!ready || loading || parsing) ? "opacity-60 cursor-not-allowed" : ""}`}
+            className={`glass-button px-6 py-2 [background-image:var(--gradient-primary)]
+              hover:brightness-105 active:scale-[.99]
+              ${(!ready || loading || parsing) ? "opacity-60 cursor-not-allowed" : ""}`}
             onClick={handleAnalyze}
             disabled={!ready || loading || parsing}
           >
@@ -149,7 +149,7 @@ export default function Analyze() {
 
         {/* Results */}
         <div className="mt-6">
-          <ResultCard data={result} />
+          {result && <ResultCard data={result} />}
         </div>
       </div>
     </div>
