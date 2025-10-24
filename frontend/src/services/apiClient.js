@@ -1,13 +1,29 @@
-const API_BASE = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:5000/api"; // add /api only if your backend uses it
-
-export async function scoreResume(payload) {
+const API_BASE = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:5000/api"; 
+export async function scoreResume(resumeText, jobText) {
   const res = await fetch(`${API_BASE}/score`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ resumeText, jobText }),
   });
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
+  // Parse once
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const msg = typeof data === "object" ? JSON.stringify(data) : String(data);
+    throw new Error(msg || "Score request failed");
+  }
+
+
+  if (typeof data.score === "number") {
+    return data; 
+  }
+
+  const similarity = typeof data.similarity === "number" ? data.similarity : 0;
+  return {
+    score: Math.round(similarity * 100),
+    matches: data.matches ?? [],
+    missing_keywords: data.missing_keywords ?? [],
+    denominator: data.denominator ?? undefined,
+  };
 }
 
 export async function scoreResumeFile({ file, job_text, job_title = null, isPro = false }) {
@@ -21,7 +37,6 @@ export async function scoreResumeFile({ file, job_text, job_title = null, isPro 
   return res.json();
 }
 
-/** 🔹 Extract just the text from an uploaded file. Backend should return { text: "<plain text>" } */
 export async function extractTextFromFileAPI(file) {
   const fd = new FormData();
   fd.append("file", file);

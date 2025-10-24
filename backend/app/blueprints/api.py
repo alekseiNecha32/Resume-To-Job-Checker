@@ -1,16 +1,16 @@
-# app/blueprints/api.py
 from flask import Blueprint, request, jsonify
 from werkzeug.exceptions import BadRequest
 from app.utils.extractors import extract_any, sniff_ext
-import re  # <-- needed
+import re
 
-api_bp = Blueprint("api", __name__)
+from app.utils.text_utils import get_text_similarity
+
+api_bp = Blueprint("api", __name__, url_prefix="/api")
 
 @api_bp.get("/ping")
 def ping():
     return jsonify({"message": "pong"}), 200
 
-# ---------- Simple ATS scoring helpers ----------
 MAX_SIZE = 5 * 1024 * 1024  # 5MB
 
 STOPWORDS = {
@@ -19,20 +19,6 @@ STOPWORDS = {
     "our","their","they","he","she","i"
 }
 
-def normalize(text: str) -> list[str]:
-    words = re.findall(r"[a-zA-Z][a-zA-Z+\-.#/]*", text.lower())
-    return [w for w in words if len(w) >= 2 and w not in STOPWORDS]
-
-def ats_score(resume_text: str, job_text: str) -> tuple[int, list[str]]:
-    resume_tokens = set(normalize(resume_text))
-    job_tokens    = set(normalize(job_text))
-    if not job_tokens:
-        return 0, []
-    matches = sorted(job_tokens & resume_tokens)
-    score = round(100 * len(matches) / len(job_tokens))
-    return score, matches
-
-# ---------- Extract only: return plain text for preview ----------
 @api_bp.post("/extract")
 def extract_file():
     if "file" not in request.files:
@@ -62,17 +48,58 @@ def extract_file():
         "resume_chars": len(resume_text),
     }), 200
 
-# ---------- Score only: return ATS score (and optional matches) ----------
-@api_bp.post("/score")
-def score():
-    data = request.get_json(silent=True) or {}
-    resume_text = data.get("resume_text", "")
-    job_text    = data.get("job_text", "")
-    if not resume_text or not job_text:
-        raise BadRequest("resume_text and job_text are required.")
 
-    score_pct, matches = ats_score(resume_text, job_text)
-    return jsonify({
-        "score": score_pct,
-        "matches": matches,  
-    }), 200
+# ---------- helper to coerce any shape → string ----------
+def _as_text(v):
+    """Coerce incoming values to a plain string (handles dicts like {'text': '...'})."""
+    if isinstance(v, str):
+        return v
+    if isinstance(v, dict):
+        for k in ("text", "value", "content"):
+            if isinstance(v.get(k), str):
+                return v[k]
+        return ""
+    if isinstance(v, (list, tuple)):
+        return " ".join(x for x in v if isinstance(x, str))
+    return str(v or "")
+
+
+@api_bp.route("/score", methods=["POST", "OPTIONS"])
+def score_resume_to_job():
+    if request.method == "OPTIONS":
+        return ("", 204)
+
+    data = request.get_json(silent=True)
+    if data is None:
+        return jsonify({"error": "Expected JSON body with resumeText and jobText."}), 400
+
+    # 1) Coerce to strings, THEN strip
+    resume_text = _as_text(data.get("resumeText")).strip()
+    job_text    = _as_text(data.get("jobText")).strip()
+
+    missing = []
+    if not resume_text:
+        missing.append("resumeText")
+    if not job_text:
+        missing.append("jobText")
+    if missing:
+        return jsonify({"error": f"Missing fields: {', '.join(missing)}"}), 400
+
+    # 2) Cap extreme sizes BEFORE embedding
+    MAX_CHARS = 20000
+    if len(resume_text) > MAX_CHARS:
+        resume_text = resume_text[:MAX_CHARS]
+    if len(job_text) > MAX_CHARS:
+        job_text = job_text[:MAX_CHARS]
+
+    # 3) Wrap scoring so any error returns JSON (not HTML 500)
+    try:
+        sim = get_text_similarity(resume_text, job_text)
+        return jsonify({
+            "similarity": round(sim, 4),
+            "model": "sentence-transformers/all-MiniLM-L6-v2"
+        }), 200
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": f"Internal error while scoring: {type(e).__name__}"}), 500

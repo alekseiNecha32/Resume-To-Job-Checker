@@ -13,9 +13,9 @@ export default function Analyze() {
   // ready when we have extracted text + job text
   const ready = resumeText.trim().length > 0 && job.trim().length > 0;
 
-  // --- File handling (open picker → extract on backend) ---
   const inputRef = useRef(null);
   const onBrowseClick = () => inputRef.current?.click();
+
 
   const handleFileChosen = useCallback(async (file) => {
     if (!file) return;
@@ -27,8 +27,10 @@ export default function Analyze() {
     setResult(null);
     setParsing(true);
     try {
-      const text = await extractTextFromFileAPI(file); // backend returns { text }
+      const text = await extractTextFromFileAPI(file);
       setResumeText(text || "");
+      console.log("[Analyze] extracted chars:", (text || "").length, "file:", file.name);
+      console.log("[Analyze] extracted head:", (text || "").slice(0, 120));
     } catch (e) {
       alert(e.message || "Could not extract text.");
       setResumeText("");
@@ -47,12 +49,10 @@ export default function Analyze() {
     setLoading(true);
     setResult(null);
     try {
-      const data = await scoreResume({
-        resume_text: resumeText,
-        job_text: job,
-        job_title: null,
-        isPro: false,
-      });
+      console.log("[Analyze] resume chars:", resumeText.length);
+      console.log("[Analyze] job chars:", job.length);
+      console.log("[Analyze] resume head:", resumeText.slice(0, 120));
+      const data = await scoreResume(resumeText, job); 
       setResult(data);
     } catch (e) {
       alert(e.message || "Request failed");
@@ -98,7 +98,7 @@ export default function Analyze() {
               <input
                 ref={inputRef}
                 type="file"
-                accept=".pdf,.docx,.txt"   // no .doc (unsupported)
+                accept=".pdf,.docx,.txt"
                 className="hidden"
                 onChange={(e) => handleFileChosen(e.target.files?.[0])}
               />
