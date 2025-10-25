@@ -75,6 +75,7 @@ def score_resume_to_job():
 
     resume_text = _as_text(data.get("resumeText") or data.get("resume_text")).strip()
     job_text    = _as_text(data.get("jobText")   or data.get("job_text")).strip()
+    job_title   = _as_text(data.get("jobTitle")  or data.get("job_title")).strip()
 
     if not resume_text or not job_text:
         return jsonify({"error": "Missing fields: resumeText, jobText"}), 400
@@ -83,7 +84,7 @@ def score_resume_to_job():
     if len(resume_text) > MAX_CHARS: resume_text = resume_text[:MAX_CHARS]
     if len(job_text)    > MAX_CHARS: job_text    = job_text[:MAX_CHARS]
 
-    # ---- Existing SBERT similarity logic ----
+    # ---- Existing SBERT similarity (unchanged) ----
     emb_resume = _SBERT.encode(resume_text, convert_to_tensor=True, normalize_embeddings=True)
     emb_job    = _SBERT.encode(job_text,    convert_to_tensor=True, normalize_embeddings=True)
     similarity = float(util.cos_sim(emb_resume, emb_job).item())
@@ -93,27 +94,133 @@ def score_resume_to_job():
     adjusted = max(similarity - penalty, 0.0)
     score = round(adjusted * 100)
 
-    # ---- NEW: matching & missing keywords ----
+    # ---- Focused keyword extraction (no synonyms) ----
     import re
     from collections import Counter
 
-    def tokenize(text):
-        return re.findall(r"[A-Za-z0-9][A-Za-z0-9.+#/-]*", text.lower())
+    WORD_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9.+#/-]*")
 
-    tokens_resume = set(tokenize(resume_text))
-    tokens_job = [t for t in tokenize(job_text) if t not in STOPWORDS]
-    freq_job = Counter(tokens_job)
-    # choose top keywords from job description (up to 20)
-    job_keywords = [w for w, _ in freq_job.most_common(20)]
+    # Common non-skill / title fluff to ignore (in addition to your STOPWORDS)
+    TITLE_STOP = {
+        "senior","sr","jr","junior","mid","level","ii","iii","iv",
+        "remote","hybrid","onsite","contract","full","time","ft","pt",
+        "position","role","about","opportunity","team","members","mentors",
+        "start","least","between","including","etc","e.g","eg","ie","because",
+        "nice","to","have","highly","preferred","required","years","experience",
+        "2025","2026"
+    }
 
-    matched = [kw for kw in job_keywords if kw in tokens_resume]
-    missing = [kw for kw in job_keywords if kw not in tokens_resume]
+    # Helpful tech/skill hints (lightweight — not synonyms)
+    SKILL_HINTS = {
+        # languages / runtimes
+        "javascript","typescript","python","java","kotlin","c#","csharp","go","rust","sql","bash",
+        # web / frameworks
+        "react","reactjs","angular","vue","svelte","nextjs","node","node.js","express","django","flask",
+        "asp.net","aspnet",".net","spring","springboot","shadcn","tailwind",
+        # testing / qa
+        "playwright","jest","mocha","chai","junit","pytest","selenium","unit","integration","e2e","end-to-end","testing",
+        # data / db
+        "postgres","postgresql","mysql","mssql","sqlite","mongodb","redis",
+        # devops / cloud
+        "docker","kubernetes","ci","cd","ci/cd","github","github actions","gitlab","azure","aws","gcp",
+        # apis
+        "rest","api","graphql","grpc","socket","websocket",
+        # misc
+        "oauth","jwt","openid","performance","accessibility","a11y","security"
+    }
 
-    # ---- Final response ----
+    def tokenize(s: str):
+        return [t.lower() for t in WORD_RE.findall(s or "")]
+
+    def is_noise(tok: str) -> bool:
+        if tok in STOPWORDS: return True
+        if tok in TITLE_STOP: return True
+        if tok.isnumeric(): return True
+        if len(tok) <= 2 and tok not in {"c#","go","r","ui","ux"}:
+            return True
+        return False
+
+    def bigrams(tokens):
+        for i in range(len(tokens) - 1):
+            a, b = tokens[i], tokens[i+1]
+            if not is_noise(a) and not is_noise(b):
+                yield f"{a} {b}"
+
+    # tokens
+    resume_tokens = set(tokenize(resume_text))
+    job_tokens_raw = tokenize(job_text)
+    job_tokens = [t for t in job_tokens_raw if not is_noise(t)]
+
+    # frequency from JD
+    freq = Counter(job_tokens)
+
+    # boost any token that is in SKILL_HINTS
+    for t in list(freq.keys()):
+        if t in SKILL_HINTS:
+            freq[t] += 2.5
+
+    # boost job title tokens
+    title_tokens = [t for t in tokenize(job_title) if not is_noise(t)]
+    for t in title_tokens:
+        freq[t] += 3.0
+
+    # add bigrams that look like phrases (rest api, unit testing, react hooks)
+    bi = Counter(bigrams(job_tokens))
+    for bg, cnt in bi.items():
+        a, b = bg.split()
+        bonus = 0.0
+        if a in SKILL_HINTS or b in SKILL_HINTS: bonus += 0.8
+        if re.search(r"[.+#/-]", a) or re.search(r"[.+#/-]", b): bonus += 0.8
+        bi[bg] = cnt + bonus
+
+    # pick a small, focused set
+    MAX_UNI = 16
+    MAX_BI  = 8
+
+    top_uni = [w for w, _ in freq.most_common(MAX_UNI)]
+    top_bi  = [p for p, _ in bi.most_common(MAX_BI)]
+
+    # build final keyword list: title phrase (if meaningful) + bigrams + unigrams, unique
+    ordered = []
+    seen = set()
+
+    title_phrase = job_title.lower().strip()
+    if title_phrase and len(title_tokens) >= 2:
+        ordered.append(title_phrase); seen.add(title_phrase)
+
+    for p in top_bi:
+        if p not in seen:
+            ordered.append(p); seen.add(p)
+
+    for w in top_uni:
+        if w not in seen:
+            ordered.append(w); seen.add(w)
+
+    job_keywords = ordered
+
+    # literal/phrase hit
+    def literal_hit(term: str, text: str) -> bool:
+        pattern = re.escape(term.lower()).replace(r"\ ", r"\s+")
+        return re.search(pattern, text.lower()) is not None
+
+    matched, missing = [], []
+    for kw in job_keywords:
+        if " " in kw:   # phrase
+            hit = literal_hit(kw, resume_text)
+        else:           # single token
+            hit = kw in resume_tokens
+        (matched if hit else missing).append(kw)
+
+    total = len(job_keywords)
+    coverage = round((len(matched) / total) * 100) if total else 0
+
     return jsonify({
         "model": "sentence-transformers/all-MiniLM-L6-v2",
         "similarity": round(similarity, 4),
         "score": score,
         "matchedKeywords": matched,
-        "missingKeywords": missing
+        "missingKeywords": missing,
+        "jobKeywords": job_keywords,
+        "coverage": coverage,
+        "totalKeywords": total
     }), 200

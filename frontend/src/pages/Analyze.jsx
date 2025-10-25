@@ -9,6 +9,7 @@ export default function Analyze() {
   const [loading, setLoading] = useState(false);
   const [parsing, setParsing] = useState(false);
   const [result, setResult] = useState(null);
+  const [jobTitle, setJobTitle] = useState("");
 
   // ready when we have extracted text + job text
   const ready = resumeText.trim().length > 0 && job.trim().length > 0;
@@ -121,6 +122,15 @@ export default function Analyze() {
 
           {/* RIGHT: Job Description */}
           <section>
+            <div className="text-sm font-semibold mb-2">Job Title</div>
+            <input
+              type="text"
+              value={jobTitle}
+              onChange={(e) => setJobTitle(e.target.value)}
+              placeholder="e.g., React Frontend Developer"
+              className="w-full rounded-2xl border border-border bg-white/60 dark:bg-white/5 p-3 mb-4 focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+
             <div className="text-sm font-semibold">Job Description</div>
             <div className="text-xs text-muted-foreground mb-2">
               Paste the job description here… Include requirements, responsibilities, and qualifications.

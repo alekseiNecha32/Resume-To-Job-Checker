@@ -1,9 +1,9 @@
 const API_BASE = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:5000/api"; 
-export async function scoreResume(resumeText, jobText) {
+export async function scoreResume(resumeText, jobText, jobTitle = "") {
   const res = await fetch(`${API_BASE}/score`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ resumeText, jobText }),
+    body: JSON.stringify({ resumeText, jobText, jobTitle })
   });
   // Parse once
   const data = await res.json().catch(() => ({}));
