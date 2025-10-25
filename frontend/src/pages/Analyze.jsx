@@ -52,7 +52,7 @@ export default function Analyze() {
       console.log("[Analyze] resume chars:", resumeText.length);
       console.log("[Analyze] job chars:", job.length);
       console.log("[Analyze] resume head:", resumeText.slice(0, 120));
-      const data = await scoreResume(resumeText, job); 
+      const data = await scoreResume(resumeText, job);
       setResult(data);
     } catch (e) {
       alert(e.message || "Request failed");
@@ -150,6 +150,58 @@ export default function Analyze() {
         {/* Results */}
         <div className="mt-6">
           {result && <ResultCard data={result} />}
+
+          {result?.matchedKeywords && result?.missingKeywords && (
+            <div className="mt-8 space-y-6">
+              <h3 className="text-lg font-semibold">Keyword Analysis</h3>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Matched */}
+                <div className="p-4 rounded-xl border bg-green-50 border-green-200">
+                  <h4 className="font-medium text-green-800 mb-2">
+                    ✅ Matched Keywords ({result.matchedKeywords.length})
+                  </h4>
+
+                  {result.matchedKeywords.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {result.matchedKeywords.map((word) => (
+                        <span
+                          key={`m-${word}`}
+                          className="px-2 py-1 text-sm rounded-full bg-green-200 text-green-800"
+                        >
+                          {word}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-500">No matched keywords found.</p>
+                  )}
+                </div>
+
+                {/* Missing */}
+                <div className="p-4 rounded-xl border bg-rose-50 border-rose-200">
+                  <h4 className="font-medium text-rose-800 mb-2">
+                    ⚠️ Missing Keywords ({result.missingKeywords.length})
+                  </h4>
+
+                  {result.missingKeywords.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {result.missingKeywords.map((word) => (
+                        <span
+                          key={`x-${word}`}
+                          className="px-2 py-1 text-sm rounded-full bg-rose-200 text-rose-900"
+                        >
+                          {word}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-500">None missing — great match!</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -83,6 +83,7 @@ def score_resume_to_job():
     if len(resume_text) > MAX_CHARS: resume_text = resume_text[:MAX_CHARS]
     if len(job_text)    > MAX_CHARS: job_text    = job_text[:MAX_CHARS]
 
+    # ---- Existing SBERT similarity logic ----
     emb_resume = _SBERT.encode(resume_text, convert_to_tensor=True, normalize_embeddings=True)
     emb_job    = _SBERT.encode(job_text,    convert_to_tensor=True, normalize_embeddings=True)
     similarity = float(util.cos_sim(emb_resume, emb_job).item())
@@ -92,8 +93,27 @@ def score_resume_to_job():
     adjusted = max(similarity - penalty, 0.0)
     score = round(adjusted * 100)
 
+    # ---- NEW: matching & missing keywords ----
+    import re
+    from collections import Counter
+
+    def tokenize(text):
+        return re.findall(r"[A-Za-z0-9][A-Za-z0-9.+#/-]*", text.lower())
+
+    tokens_resume = set(tokenize(resume_text))
+    tokens_job = [t for t in tokenize(job_text) if t not in STOPWORDS]
+    freq_job = Counter(tokens_job)
+    # choose top keywords from job description (up to 20)
+    job_keywords = [w for w, _ in freq_job.most_common(20)]
+
+    matched = [kw for kw in job_keywords if kw in tokens_resume]
+    missing = [kw for kw in job_keywords if kw not in tokens_resume]
+
+    # ---- Final response ----
     return jsonify({
         "model": "sentence-transformers/all-MiniLM-L6-v2",
         "similarity": round(similarity, 4),
-        "score": score
+        "score": score,
+        "matchedKeywords": matched,
+        "missingKeywords": missing
     }), 200
