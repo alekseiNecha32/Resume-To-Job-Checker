@@ -1,9 +1,12 @@
 from flask import Blueprint, request, jsonify
 from werkzeug.exceptions import BadRequest
 from app.utils.extractors import extract_any, sniff_ext
-import re
 
-from app.utils.text_utils import get_text_similarity
+from sentence_transformers import SentenceTransformer, util
+
+# from app.utils.text_utils import get_text_similarity
+_SBERT = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
+_ = _SBERT.encode("warmup", convert_to_tensor=True, normalize_embeddings=True)
 
 api_bp = Blueprint("api", __name__, url_prefix="/api")
 
@@ -11,7 +14,7 @@ api_bp = Blueprint("api", __name__, url_prefix="/api")
 def ping():
     return jsonify({"message": "pong"}), 200
 
-MAX_SIZE = 5 * 1024 * 1024  # 5MB
+MAX_SIZE = 5 * 1024 * 1024  
 
 STOPWORDS = {
     "a","an","the","and","or","to","of","in","on","for","with","at","by","from",
@@ -42,7 +45,6 @@ def extract_file():
     except Exception as e:
         return jsonify({"detail": f"Extraction failed: {e}"}), 400
 
-    # Return the raw text so the frontend can display it
     return jsonify({
         "text": resume_text,
         "resume_chars": len(resume_text),
@@ -51,7 +53,6 @@ def extract_file():
 
 # ---------- helper to coerce any shape → string ----------
 def _as_text(v):
-    """Coerce incoming values to a plain string (handles dicts like {'text': '...'})."""
     if isinstance(v, str):
         return v
     if isinstance(v, dict):
@@ -64,42 +65,35 @@ def _as_text(v):
     return str(v or "")
 
 
+
 @api_bp.route("/score", methods=["POST", "OPTIONS"])
 def score_resume_to_job():
     if request.method == "OPTIONS":
         return ("", 204)
 
-    data = request.get_json(silent=True)
-    if data is None:
-        return jsonify({"error": "Expected JSON body with resumeText and jobText."}), 400
+    data = request.get_json(silent=True) or {}
 
-    # 1) Coerce to strings, THEN strip
-    resume_text = _as_text(data.get("resumeText")).strip()
-    job_text    = _as_text(data.get("jobText")).strip()
+    resume_text = _as_text(data.get("resumeText") or data.get("resume_text")).strip()
+    job_text    = _as_text(data.get("jobText")   or data.get("job_text")).strip()
 
-    missing = []
-    if not resume_text:
-        missing.append("resumeText")
-    if not job_text:
-        missing.append("jobText")
-    if missing:
-        return jsonify({"error": f"Missing fields: {', '.join(missing)}"}), 400
+    if not resume_text or not job_text:
+        return jsonify({"error": "Missing fields: resumeText, jobText"}), 400
 
-    # 2) Cap extreme sizes BEFORE embedding
     MAX_CHARS = 20000
-    if len(resume_text) > MAX_CHARS:
-        resume_text = resume_text[:MAX_CHARS]
-    if len(job_text) > MAX_CHARS:
-        job_text = job_text[:MAX_CHARS]
+    if len(resume_text) > MAX_CHARS: resume_text = resume_text[:MAX_CHARS]
+    if len(job_text)    > MAX_CHARS: job_text    = job_text[:MAX_CHARS]
 
-    # 3) Wrap scoring so any error returns JSON (not HTML 500)
-    try:
-        sim = get_text_similarity(resume_text, job_text)
-        return jsonify({
-            "similarity": round(sim, 4),
-            "model": "sentence-transformers/all-MiniLM-L6-v2"
-        }), 200
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return jsonify({"error": f"Internal error while scoring: {type(e).__name__}"}), 500
+    emb_resume = _SBERT.encode(resume_text, convert_to_tensor=True, normalize_embeddings=True)
+    emb_job    = _SBERT.encode(job_text,    convert_to_tensor=True, normalize_embeddings=True)
+    similarity = float(util.cos_sim(emb_resume, emb_job).item())
+
+    shared = len(set(resume_text.split()) & set(job_text.split()))
+    penalty = 0.15 if shared < 5 else 0.0
+    adjusted = max(similarity - penalty, 0.0)
+    score = round(adjusted * 100)
+
+    return jsonify({
+        "model": "sentence-transformers/all-MiniLM-L6-v2",
+        "similarity": round(similarity, 4),
+        "score": score
+    }), 200
