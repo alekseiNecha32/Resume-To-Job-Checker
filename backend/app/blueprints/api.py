@@ -4,7 +4,6 @@ from app.utils.extractors import extract_any, sniff_ext
 
 from sentence_transformers import SentenceTransformer, util
 
-# from app.utils.text_utils import get_text_similarity
 _SBERT = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
 _ = _SBERT.encode("warmup", convert_to_tensor=True, normalize_embeddings=True)
 
@@ -19,7 +18,8 @@ MAX_SIZE = 5 * 1024 * 1024
 STOPWORDS = {
     "a","an","the","and","or","to","of","in","on","for","with","at","by","from",
     "is","are","was","were","be","as","that","this","it","its","your","you","we",
-    "our","their","they","he","she","i"
+    "our","their","they","he","she","i", "good", "understanding", "knowledge", "strong", "excellent",
+    "skills","technology","experience","knowledge","ability","strong","excellent"
 }
 
 @api_bp.post("/extract")
@@ -74,19 +74,18 @@ def score_resume_to_job():
     data = request.get_json(silent=True) or {}
 
     resume_text = _as_text(data.get("resumeText") or data.get("resume_text")).strip()
-    job_text    = _as_text(data.get("jobText")   or data.get("job_text")).strip()
-    job_title   = _as_text(data.get("jobTitle")  or data.get("job_title")).strip()
+    job_text = _as_text(data.get("jobText")   or data.get("job_text")).strip()
+    job_title = _as_text(data.get("jobTitle")  or data.get("job_title")).strip()
 
     if not resume_text or not job_text:
         return jsonify({"error": "Missing fields: resumeText, jobText"}), 400
 
     MAX_CHARS = 20000
     if len(resume_text) > MAX_CHARS: resume_text = resume_text[:MAX_CHARS]
-    if len(job_text)    > MAX_CHARS: job_text    = job_text[:MAX_CHARS]
+    if len(job_text) > MAX_CHARS: job_text = job_text[:MAX_CHARS]
 
-    # ---- Existing SBERT similarity (unchanged) ----
     emb_resume = _SBERT.encode(resume_text, convert_to_tensor=True, normalize_embeddings=True)
-    emb_job    = _SBERT.encode(job_text,    convert_to_tensor=True, normalize_embeddings=True)
+    emb_job = _SBERT.encode(job_text, convert_to_tensor=True, normalize_embeddings=True)
     similarity = float(util.cos_sim(emb_resume, emb_job).item())
 
     shared = len(set(resume_text.split()) & set(job_text.split()))
@@ -94,7 +93,6 @@ def score_resume_to_job():
     adjusted = max(similarity - penalty, 0.0)
     score = round(adjusted * 100)
 
-    # ---- Focused keyword extraction (no synonyms) ----
     import re
     from collections import Counter
 
@@ -112,20 +110,13 @@ def score_resume_to_job():
 
     # Helpful tech/skill hints (lightweight — not synonyms)
     SKILL_HINTS = {
-        # languages / runtimes
         "javascript","typescript","python","java","kotlin","c#","csharp","go","rust","sql","bash",
-        # web / frameworks
         "react","reactjs","angular","vue","svelte","nextjs","node","node.js","express","django","flask",
         "asp.net","aspnet",".net","spring","springboot","shadcn","tailwind",
-        # testing / qa
         "playwright","jest","mocha","chai","junit","pytest","selenium","unit","integration","e2e","end-to-end","testing",
-        # data / db
         "postgres","postgresql","mysql","mssql","sqlite","mongodb","redis",
-        # devops / cloud
         "docker","kubernetes","ci","cd","ci/cd","github","github actions","gitlab","azure","aws","gcp",
-        # apis
         "rest","api","graphql","grpc","socket","websocket",
-        # misc
         "oauth","jwt","openid","performance","accessibility","a11y","security"
     }
 
@@ -173,14 +164,12 @@ def score_resume_to_job():
         if re.search(r"[.+#/-]", a) or re.search(r"[.+#/-]", b): bonus += 0.8
         bi[bg] = cnt + bonus
 
-    # pick a small, focused set
     MAX_UNI = 16
     MAX_BI  = 8
 
     top_uni = [w for w, _ in freq.most_common(MAX_UNI)]
     top_bi  = [p for p, _ in bi.most_common(MAX_BI)]
 
-    # build final keyword list: title phrase (if meaningful) + bigrams + unigrams, unique
     ordered = []
     seen = set()
 
@@ -198,7 +187,6 @@ def score_resume_to_job():
 
     job_keywords = ordered
 
-    # literal/phrase hit
     def literal_hit(term: str, text: str) -> bool:
         pattern = re.escape(term.lower()).replace(r"\ ", r"\s+")
         return re.search(pattern, text.lower()) is not None
