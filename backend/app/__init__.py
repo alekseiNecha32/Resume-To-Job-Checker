@@ -3,6 +3,8 @@ from flask import Flask
 from flask_cors import CORS
 from dotenv import load_dotenv
 
+from app.blueprints.api import api_bp
+from app.blueprints.smart import smart_bp
 def create_app():
     load_dotenv()
     app = Flask(__name__)
@@ -20,8 +22,9 @@ def create_app():
         supports_credentials=False,  
     )
 
-    from app.blueprints.api import api_bp
+    
     app.register_blueprint(api_bp)  # 
+    app.register_blueprint(smart_bp)
 
     @app.get("/health")
     def health():

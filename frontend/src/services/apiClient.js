@@ -25,6 +25,21 @@ export async function scoreResume(resumeText, jobText, jobTitle = "") {
     denominator: data.denominator ?? undefined,
   };
 }
+// add this function (keep your existing exports)
+export async function smartAnalyze({ resumeText, jobText, jobTitle }) {
+  const r = await fetch("/api/smart/analyze", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      resume_text: resumeText,
+      job_text: jobText,
+      job_title: jobTitle
+    })
+  });
+  const j = await r.json();
+  if (!r.ok) throw new Error(j.error || "Smart analysis failed");
+  return j;
+}
 
 export async function scoreResumeFile({ file, job_text, job_title = null, isPro = false }) {
   const fd = new FormData();

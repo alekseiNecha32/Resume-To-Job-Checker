@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 import ResultCard from "../components/ResultCard.jsx";
 import { scoreResume, extractTextFromFileAPI } from "../services/apiClient.js";
+import SmartSuggestions from "../components/SmartSuggestions.jsx";
 
 export default function Analyze() {
   const [resumeFile, setResumeFile] = useState(null);
@@ -11,12 +12,10 @@ export default function Analyze() {
   const [result, setResult] = useState(null);
   const [jobTitle, setJobTitle] = useState("");
 
-  // ready when we have extracted text + job text
   const ready = resumeText.trim().length > 0 && job.trim().length > 0;
 
   const inputRef = useRef(null);
   const onBrowseClick = () => inputRef.current?.click();
-
 
   const handleFileChosen = useCallback(async (file) => {
     if (!file) return;
@@ -65,12 +64,14 @@ export default function Analyze() {
   return (
     <div className="relative min-h-screen p-6 overflow-hidden">
       {/* background */}
-      <div className="pointer-events-none absolute inset-0 -z-10
+      <div
+        className="pointer-events-none absolute inset-0 -z-10
         [background:
           radial-gradient(60%_40%_at_15%_0%,hsl(var(--primary)/.18),transparent),
           radial-gradient(50%_35%_at_85%_0%,hsl(230_89%_65%/.18),transparent),
           radial-gradient(80%_60%_at_50%_100%,hsl(217_91%_60%/.08),transparent),
-          linear-gradient(180deg,hsl(var(--background)),hsl(var(--background)))]" />
+          linear-gradient(180deg,hsl(var(--background)),hsl(var(--background)))]"
+      />
 
       <div className="mx-auto max-w-6xl glass-card p-6 sm:p-8">
         <header className="mb-6">
@@ -208,6 +209,19 @@ export default function Analyze() {
                   ) : (
                     <p className="text-sm text-gray-500">None missing — great match!</p>
                   )}
+                </div>
+              </div>
+
+              {/* Centered Smart Suggestions (full width under the grid) */}
+              <div className="flex justify-center mt-8 w-full">
+
+                <div className="w-full max-w-4xl">
+
+                  <SmartSuggestions
+                    resumeText={resumeText}
+                    jobText={job}
+                    jobTitle={jobTitle}
+                  />
                 </div>
               </div>
             </div>
