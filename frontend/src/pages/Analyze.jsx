@@ -121,7 +121,7 @@ export default function Analyze() {
             </div>
           </section>
 
-          {/* RIGHT: Job Description */}
+          {/*Job Description */}
           <section>
             <div className="text-sm font-semibold mb-2">Job Title</div>
             <input
@@ -212,7 +212,6 @@ export default function Analyze() {
                 </div>
               </div>
 
-              {/* Centered Smart Suggestions (full width under the grid) */}
               <div className="flex justify-center mt-8 w-full">
 
                 <div className="w-full max-w-4xl">

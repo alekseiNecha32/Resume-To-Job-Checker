@@ -28,7 +28,6 @@ export default function SmartSuggestions({ resumeText, jobText, jobTitle }) {
 
   return (
     <div className="w-full flex flex-col items-center mt-4">
-      {/* Centered trigger button */}
       <button
         onClick={run}
         className="block mx-auto px-4 py-2 rounded-xl bg-indigo-600 text-white hover:opacity-90 disabled:opacity-50"
@@ -39,7 +38,6 @@ export default function SmartSuggestions({ resumeText, jobText, jobTitle }) {
 
       {open && (
         <div className="relative mx-auto mt-4 w-full max-w-3xl rounded-2xl border bg-white/60 backdrop-blur p-6 shadow-sm">
-          {/* Centered heading; Close absolutely positioned */}
           <h3 className="text-center font-semibold">Smart Suggestions</h3>
           <button
             onClick={() => setOpen(false)}

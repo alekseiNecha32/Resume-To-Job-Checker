@@ -98,7 +98,6 @@ def score_resume_to_job():
 
     WORD_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9.+#/-]*")
 
-    # Common non-skill / title fluff to ignore (in addition to your STOPWORDS)
     TITLE_STOP = {
         "senior","sr","jr","junior","mid","level","ii","iii","iv",
         "remote","hybrid","onsite","contract","full","time","ft","pt",
@@ -108,7 +107,6 @@ def score_resume_to_job():
         "2025","2026"
     }
 
-    # Helpful tech/skill hints (lightweight — not synonyms)
     SKILL_HINTS = {
         "javascript","typescript","python","java","kotlin","c#","csharp","go","rust","sql","bash",
         "react","reactjs","angular","vue","svelte","nextjs","node","node.js","express","django","flask",
@@ -155,7 +153,6 @@ def score_resume_to_job():
     for t in title_tokens:
         freq[t] += 3.0
 
-    # add bigrams that look like phrases (rest api, unit testing, react hooks)
     bi = Counter(bigrams(job_tokens))
     for bg, cnt in bi.items():
         a, b = bg.split()
@@ -193,9 +190,9 @@ def score_resume_to_job():
 
     matched, missing = [], []
     for kw in job_keywords:
-        if " " in kw:   # phrase
+        if " " in kw:  
             hit = literal_hit(kw, resume_text)
-        else:           # single token
+        else:       
             hit = kw in resume_tokens
         (matched if hit else missing).append(kw)
 

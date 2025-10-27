@@ -1,21 +1,17 @@
-// frontend/src/components/ResultCard.jsx
 export default function ResultCard({ data }) {
   if (!data || typeof data !== "object") return null;
 
-  // Safe reads with defaults
   const score = Number.isFinite(data.score) ? data.score : 0;
   const matched = Array.isArray(data.matches) ? data.matches : (data.matched_keywords ?? []);
   const missing = Array.isArray(data.missing_keywords) ? data.missing_keywords : [];
 
-  // Optional breakdown values (if your backend starts sending them later)
   const textSimilarity = data?.breakdown?.text_similarity;
   const keywordCoverage = data?.breakdown?.keyword_coverage;
 
-  // Simple color badge like you had
   const color =
-    score >= 80 ? "#059669" :   // green
-      score >= 60 ? "#d97706" :   // amber
-        "#b91c1c";    // red
+    score >= 80 ? "#059669" : 
+      score >= 60 ? "#d97706" : 
+        "#b91c1c";
 
   return (
     <div className="glass-card p-5 mt-6">
@@ -26,7 +22,6 @@ export default function ResultCard({ data }) {
         </span>
       </div>
 
-      {/* Matched keywords (uses data.matches when available) */}
       {matched.length > 0 && (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginTop: 14 }}>
           <div>
@@ -41,7 +36,6 @@ export default function ResultCard({ data }) {
             </div>
           </div>
 
-          {/* Missing only if backend provides it */}
           {missing.length > 0 && (
             <div>
               <h3 style={{ color: "#991b1b", fontWeight: 700, marginBottom: 8 }}>Missing Keywords</h3>

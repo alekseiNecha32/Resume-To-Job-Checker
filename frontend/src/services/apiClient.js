@@ -5,7 +5,6 @@ export async function scoreResume(resumeText, jobText, jobTitle = "") {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ resumeText, jobText, jobTitle })
   });
-  // Parse once
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     const msg = typeof data === "object" ? JSON.stringify(data) : String(data);
@@ -25,7 +24,7 @@ export async function scoreResume(resumeText, jobText, jobTitle = "") {
     denominator: data.denominator ?? undefined,
   };
 }
-// add this function (keep your existing exports)
+
 export async function smartAnalyze({ resumeText, jobText, jobTitle }) {
   const r = await fetch("/api/smart/analyze", {
     method: "POST",
