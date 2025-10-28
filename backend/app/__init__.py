@@ -5,6 +5,8 @@ from dotenv import load_dotenv
 
 from app.blueprints.api import api_bp
 from app.blueprints.smart import smart_bp
+from app.blueprints.authorization import auth_bp as auth_api_bp
+
 def create_app():
     load_dotenv()
     app = Flask(__name__)
@@ -16,15 +18,16 @@ def create_app():
             r"/api/*": {
                 "origins": ["http://localhost:5173", "http://127.0.0.1:5173"],
                 "methods": ["GET", "POST", "OPTIONS"],
-                "allow_headers": ["Content-Type"],
+                "allow_headers": ["Content-Type", "Authorization"],
             }
         },
-        supports_credentials=False,  
+        supports_credentials=False,
     )
 
     
     app.register_blueprint(api_bp)  # 
     app.register_blueprint(smart_bp)
+    app.register_blueprint(auth_api_bp)
 
     @app.get("/health")
     def health():
