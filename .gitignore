@@ -10,3 +10,7 @@ Thumbs.db
 *.log
 logs/
 coverage/
+
+env/
+.env
+.env.*

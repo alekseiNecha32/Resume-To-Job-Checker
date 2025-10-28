@@ -1,17 +1,23 @@
 from dataclasses import dataclass
-from typing import List, Dict
+from typing import List, Dict, Tuple
 
+import numpy as np
 from sentence_transformers import SentenceTransformer, util
 from keybert import KeyBERT
 from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.cluster import KMeans
 import spacy
 
 from app.utils.text_norm import normalize
 
-# Load once
+
 EMB = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
-KW  = KeyBERT(model="all-MiniLM-L6-v2")
-NLP = spacy.load("en_core_web_sm")
+KW = KeyBERT(model="all-MiniLM-L6-v2")
+
+try:
+    NLP = spacy.load("en_core_web_sm")
+except Exception:
+    NLP = spacy.blank("en")
 
 CANON_SKILLS = [
     "python","java","c#","javascript","typescript","react","node.js","asp.net",
@@ -21,8 +27,11 @@ CANON_SKILLS = [
     "oauth2","jwt","logging","monitoring","ml","nlp","ml.net","pandas",
     "scikit-learn","azure devops","terraform"
 ]
-ACTION_VERBS = ["built","designed","implemented","optimized","migrated",
-               "automated","led","owned","delivered","deployed","scaled","mentored","improved"]
+ACTION_VERBS = [
+    "built","designed","implemented","optimized","migrated",
+    "automated","led","owned","delivered","deployed","scaled","mentored","improved"
+]
+
 
 @dataclass
 class SmartAdvice:
@@ -38,8 +47,12 @@ class SmartAdvice:
 def _embed(text: str):
     return EMB.encode([text], normalize_embeddings=True)
 
+
 def _sim(a: str, b: str) -> float:
+    if not a or not b:
+        return 0.0
     return float(util.cos_sim(_embed(a), _embed(b))[0][0])
+
 
 def _keybert_terms(text: str, top_n=12) -> List[str]:
     terms = []
@@ -50,19 +63,78 @@ def _keybert_terms(text: str, top_n=12) -> List[str]:
     return terms
 
 def _tfidf_terms(jd: str, resume: str, limit=150) -> List[str]:
-    vec = TfidfVectorizer(ngram_range=(1,2), stop_words="english", max_features=600)
+    vec = TfidfVectorizer(
+        ngram_range=(1,2),
+        stop_words="english",
+        max_features=600
+    )
     X = vec.fit_transform([jd, resume])
     vocab = vec.get_feature_names_out().tolist()
-    import numpy as np
     weights = X[0].toarray().ravel()
     order = np.argsort(-weights)
     return [vocab[i] for i in order if len(vocab[i]) >= 3][:limit]
 
+def _top_job_phrases(job_text: str, resume_text: str, top_k: int = 40) -> List[str]:
+    """Job-only phrases via TF-IDF (1–3 grams) + KeyBERT ranking."""
+    tfidf = TfidfVectorizer(
+        ngram_range=(1,3),
+        stop_words="english",
+        max_features=1200,
+        token_pattern=r"(?u)\b[a-zA-Z][a-zA-Z0-9\-\+\.#]+\b"
+    )
+    X = tfidf.fit_transform([job_text, resume_text])  
+    vocab = np.array(tfidf.get_feature_names_out())
+    job_w = X[0].toarray()[0]
+    res_w = X[1].toarray()[0]
+    score = job_w - res_w                      
+    order = np.argsort(-score)
+    tfidf_top = [vocab[i] for i in order if score[i] > 0][:top_k]
+
+    kb = [t for t in _keybert_terms(job_text, top_n=top_k) if t not in tfidf_top]
+    seen, out = set(), []
+    for p in tfidf_top + kb:
+        if len(p) >= 3 and p not in seen:
+            out.append(p); seen.add(p)
+    return out[:top_k]
+
+def _sem_not_covered(phrases: List[str], resume_text: str, thr: float = 0.78) -> List[str]:
+    """Keep job phrases that the resume doesn't already cover semantically."""
+    if not phrases:
+        return []
+    res_vec = EMB.encode([resume_text], normalize_embeddings=True)[0]
+    ph_vecs = EMB.encode(phrases, normalize_embeddings=True)
+    res_n = np.linalg.norm(res_vec) + 1e-12
+    keep = []
+    for p, v in zip(phrases, ph_vecs):
+        sim = float(np.dot(v, res_vec) / ((np.linalg.norm(v) + 1e-12) * res_n))
+        if sim < thr:
+            keep.append(p)
+    return keep
+
+def _cluster_themes(phrases: List[str], max_k: int = 4) -> Dict[str, List[str]]:
+    """Cluster remaining phrases (MiniLM) into themes to drive suggestions."""
+    if not phrases:
+        return {}
+    if len(phrases) <= 6:
+        return {phrases[0]: phrases}
+    V = EMB.encode(phrases, normalize_embeddings=True)
+    k = min(max_k, max(2, len(phrases) // 6))
+    km = KMeans(n_clusters=k, n_init="auto", random_state=42)
+    labels = km.fit_predict(V)
+    groups: Dict[str, List[str]] = {}
+    for lab in range(k):
+        idxs = np.where(labels == lab)[0]
+        centroid = km.cluster_centers_[lab]
+        rep_idx = min(idxs, key=lambda i: np.linalg.norm(V[i] - centroid))
+        rep = phrases[rep_idx]
+        groups[rep] = [phrases[i] for i in idxs]
+    return groups
+
+
 def _expand_to_canon(terms: List[str]) -> List[str]:
-    if not terms: return []
-    e_can = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2").encode(
-        CANON_SKILLS, normalize_embeddings=True
-    )  # uses same model; already loaded above
+    if not terms:
+        return []
+    e_can = EMB.encode(CANON_SKILLS, normalize_embeddings=True)
     e_terms = EMB.encode(terms, normalize_embeddings=True)
     sims = util.cos_sim(e_terms, e_can)
     picked = {CANON_SKILLS[int(sims[i].argmax())] for i in range(len(terms))}
@@ -72,6 +144,43 @@ def _extract_action_verbs(text: str) -> List[str]:
     doc = NLP(text)
     verbs = {t.lemma_.lower() for t in doc if t.pos_ == "VERB" and t.lemma_.lower() in ACTION_VERBS}
     return sorted(list(verbs))
+
+# -------------------------
+# Auto suggestions (no hand rules)
+# -------------------------
+def _compose_auto_suggestions(job_text: str, resume_text: str,
+                              present_skills: List[str], missing_skills: List[str],
+                              job_title: str) -> Tuple[Dict[str, List[str]], List[str]]:
+    top = _top_job_phrases(job_text, resume_text, top_k=40)
+    missing_phr = _sem_not_covered(top, resume_text, thr=0.78)
+    themes = _cluster_themes(missing_phr, max_k=4)
+
+    exp: List[str] = []
+    for rep, items in list(themes.items())[:4]:
+        ex = [w for w in items if w != rep][:2]
+        if ex:
+            exp.append(f"Add an experience bullet showing **{rep}** (e.g., {', '.join(ex)}) with a measurable outcome.")
+        else:
+            exp.append(f"Add an experience bullet showing **{rep}** with a measurable outcome.")
+
+    prj: List[str] = []
+    top_keys = list(themes.keys())[:3]
+    if top_keys:
+        prj.append(f"Ship a small project using {', '.join(top_keys)}; include a README with metric(s) and a short demo.")
+
+
+    strengths = present_skills[:2]
+    mix = ", ".join((top_keys + strengths)[:3]) if (top_keys or strengths) else "the role’s key technologies"
+    title_txt = job_title or "this role"
+    summ = [f"Add a 2–3 line summary tailored to **{title_txt}** that mentions {mix} and a recent impact metric."]
+
+    bullets: List[str] = []
+    if top_keys:
+        bullets.append(f"Delivered a feature improving a key metric by Z% using {top_keys[0]}; add data and context.")
+    bullets.append("Action → Tech → Result: quantify (%/ms/errors) and keep to one sentence.")
+
+    return {"Summary": summ, "Experience": exp, "Projects": prj}, bullets
+
 
 def smart_predict_resume_improvements(resume_text: str, job_text: str, job_title: str = "") -> SmartAdvice:
     r = normalize(resume_text); j = normalize(job_text); t = normalize(job_title or "")
@@ -93,30 +202,13 @@ def smart_predict_resume_improvements(resume_text: str, job_text: str, job_title
     coverage = len(present) / max(1, (len(present) + len(missing)))
     fit = int(round(max(0, min(1.0, sim_rj*0.6 + sim_rt*0.2 + coverage*0.2)) * 100))
 
-    section_suggestions = {"Summary": [], "Experience": [], "Projects": []}
-    if t and sim_rt < 0.35:
-        top = ", ".join((critical_gaps[:3] or missing[:3]))
-        section_suggestions["Summary"].append(
-            f"Add a 2–3 line summary aligned to “{job_title}” and highlight {top}."
-        )
-    if any(x in missing for x in ["ci/cd","github actions","azure devops"]):
-        section_suggestions["Experience"].append("Add a CI/CD bullet: pipelines on PR, tests, auto-deploy (tool + impact).")
-    if any(x in missing for x in ["unit testing","integration testing"]):
-        section_suggestions["Experience"].append("Add testing results (framework + coverage % or defect reduction).")
-    if any(x in missing for x in ["security","oauth2","jwt"]):
-        section_suggestions["Experience"].append("Add security details (OAuth2/JWT, input validation, secrets).")
-
-    bullets = []
-    if "ci/cd" in critical_gaps or "github actions" in critical_gaps:
-        bullets.append("Built CI/CD pipelines (GitHub Actions) running unit/E2E tests and deploying Docker images; cut release time by 40%.")
-    if "unit testing" in critical_gaps:
-        bullets.append("Implemented unit tests (Jest/JUnit) and E2E tests (Playwright); improved coverage 45%→85%, reduced regressions.")
-    if "rest api" in critical_gaps:
-        bullets.append("Designed REST APIs and added caching; lowered avg latency 320ms→140ms.")
-    if any(x in critical_gaps for x in ["sql","postgresql","mysql"]):
-        bullets.append("Optimized SQL with indexes & query tuning; sped up heavy report 9.2s→2.1s.")
-    if any(x in critical_gaps for x in ["docker","kubernetes"]):
-        bullets.append("Containerized services with Docker; per-branch review apps improved onboarding and parity.")
+    section_suggestions, bullets = _compose_auto_suggestions(
+        job_text=j,
+        resume_text=r,
+        present_skills=sorted(present),
+        missing_skills=sorted(missing),
+        job_title=job_title
+    )
 
     verbs = _extract_action_verbs(r)
     rewrite_hints = ([
