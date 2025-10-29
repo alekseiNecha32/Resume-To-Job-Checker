@@ -55,24 +55,29 @@ export async function scoreResume(resumeText, jobText, jobTitle = "") {
 }
 
 export async function smartAnalyze({ resumeText, jobText, jobTitle }) {
-  const r = await fetch(`${API_BASE}/smart/analyze`, {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_BASE}/smart/analyze`, {
     method: "POST",
-    headers: await authHeaders(),
-    body: JSON.stringify({
-      resume_text: resumeText,
-      job_text: jobText,
-      job_title: jobTitle
-    })
+    headers,
+    body: JSON.stringify({ resume_text: resumeText, job_text: jobText, job_title: jobTitle })
   });
+
   let j;
-  try { j = await r.json(); } catch { j = {}; }
-  if (!r.ok) throw new Error(j.error || `Smart analysis failed (${r.status})`);
+  try {
+    j = await res.json();
+  } catch {
+    j = {};
+  }
+  if (!res.ok) throw new Error(j.error || `Smart analysis failed (${res.status})`);
   return j;
 }
+
+
 export async function getMe() {
-  const r = await fetch(`${API_BASE}/me`, { headers: await authHeaders() });
+  const headers = await authHeaders();
+  const r = await fetch(`${API_BASE}/me`, { method: "GET", headers });
   if (!r.ok) return null;
-  return r.json(); // { user_id, credits }
+  return await r.json().catch(() => null);
 }
 
 export async function createCheckoutSession() {
