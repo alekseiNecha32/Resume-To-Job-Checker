@@ -5,9 +5,77 @@ from dotenv import load_dotenv
 
 auth_bp = Blueprint("auth_api", __name__, url_prefix="/api")
 
-# ...existing code...
-# ...existing code...
-# ...existing code...
+@auth_bp.post("/auth/create_profile")
+def create_profile():
+    """Upsert a profile for the authenticated user with starter credits (10)."""
+    try:
+        load_dotenv()
+        SUPABASE_URL = os.getenv("SUPABASE_URL")
+        SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+        if not SUPABASE_URL or not SUPABASE_KEY:
+            return jsonify({"error": "server_misconfigured"}), 500
+
+        supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+        auth = request.headers.get("Authorization", "") or ""
+        if not auth.lower().startswith("bearer "):
+            return jsonify({"error": "unauthorized"}), 401
+
+        token = auth.split(" ", 1)[1].strip()
+
+        user = None
+        try:
+            if hasattr(supabase.auth, "api") and hasattr(supabase.auth.api, "get_user"):
+                uresp = supabase.auth.api.get_user(token)
+                user = (uresp.get("data") or {}).get("user") if isinstance(uresp, dict) else getattr(uresp, "user", None)
+            elif hasattr(supabase.auth, "get_user"):
+                uresp2 = supabase.auth.get_user(token)
+                user = (uresp2.get("data") or {}).get("user") if isinstance(uresp2, dict) else getattr(uresp2, "user", None)
+        except Exception as e:
+            print("DEBUG create_profile get_user exception:", repr(e))
+            return jsonify({"error": "unauthorized"}), 401
+
+        if not user:
+            return jsonify({"error": "unauthorized"}), 401
+
+        uid = user.get("id") if isinstance(user, dict) else getattr(user, "id", None)
+        email = user.get("email") if isinstance(user, dict) else getattr(user, "email", None)
+
+        if not uid:
+            return jsonify({"error": "unauthorized"}), 401
+
+        body = request.get_json(silent=True) or {}
+        full_name = body.get("full_name") or (user.get("user_metadata", {}) or {}).get("full_name") if isinstance(user, dict) else None
+
+        # upsert profile with starter credits
+        # use upsert so it creates or updates existing row
+        try:
+            supabase.table("profiles").upsert({
+                "user_id": uid,
+                "email": email,
+                "full_name": full_name,
+                "credits": 10
+            }).execute()
+        except TypeError:
+            # some supabase clients accept on_conflict; try explicit upsert with on_conflict
+            supabase.table("profiles").upsert({
+                "user_id": uid,
+                "email": email,
+                "full_name": full_name,
+                "credits": 10
+            }, on_conflict="user_id").execute()
+
+        return jsonify({"user_id": uid, "email": email, "credits": 10}), 200
+
+    except Exception:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": "internal_server_error"}), 500
+
+
+
+
+
 @auth_bp.get("/me")
 def me():
     """Return current user id / credits. Accepts X-User-Id (dev) or Authorization: Bearer <token>."""

@@ -1,22 +1,20 @@
 
 import { supabase } from "../lib/supabaseClient";
 
-const API_BASE = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:5000/api";
+export const API_BASE = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:5000/api";
 
 
 
-async function authHeaders() {
+export async function authHeaders() {
   const { data: { session } } = await supabase.auth.getSession();
   console.log("DEBUG session:", session);
   const headers = { "Content-Type": "application/json" };
- // If we have an access token, send it as Authorization
-    if (session?.access_token) {
-        console.log("DEBUG sending Authorization Bearer token");
-        headers["Authorization"] = `Bearer ${session.access_token}`;
-        return headers;
-    }
-
-    // DEV fallback: optionally send X-User-Id if you set VITE_DEV_USER_ID for local dev
+  // If we have an access token, send it as Authorization
+  if (session?.access_token) {
+    console.log("DEBUG sending Authorization Bearer token");
+    headers["Authorization"] = `Bearer ${session.access_token}`;
+    return headers;
+  }
     const devUid = import.meta.env.VITE_DEV_USER_ID;
     if (devUid) {
         console.log("DEBUG using dev X-User-Id:", devUid);
