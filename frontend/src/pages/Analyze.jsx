@@ -1,7 +1,14 @@
 import { useCallback, useRef, useState, useEffect } from "react";
 import ResultCard from "../components/ResultCard.jsx";
-import { scoreResume, extractTextFromFileAPI, getMe, createCheckoutSession } from "../services/apiClient.js";
+import {
+  scoreResume,
+  extractTextFromFileAPI,
+  getMe,
+  createCheckoutSession,
+  smartAnalyze,
+} from "../services/apiClient.js";
 import SmartSuggestions from "../components/SmartSuggestions.jsx";
+import { supabase } from "../lib/supabaseClient.js";
 
 export default function Analyze() {
   const [resumeFile, setResumeFile] = useState(null);
@@ -12,15 +19,18 @@ export default function Analyze() {
   const [result, setResult] = useState(null);
   const [jobTitle, setJobTitle] = useState("");
 
-
-
-
+  // profile / credits
   const [me, setMe] = useState(null);
   const [loadingMe, setLoadingMe] = useState(true);
 
+  // smart analysis state
+  const [smartResult, setSmartResult] = useState(null);
+  const [runningSmart, setRunningSmart] = useState(false);
+
+  // fetch profile
   useEffect(() => {
     let mounted = true;
-    (async () => {
+    async function loadMe() {
       try {
         const u = await getMe();
         if (mounted) setMe(u);
@@ -29,8 +39,18 @@ export default function Analyze() {
       } finally {
         if (mounted) setLoadingMe(false);
       }
-    })();
-    return () => (mounted = false);
+    }
+    loadMe();
+
+    // subscribe to auth changes so UI updates automatically after login/logout
+    const { data: sub } = supabase.auth.onAuthStateChange(() => {
+      // re-fetch profile when auth state changes
+      loadMe();
+    });
+    return () => {
+      mounted = false;
+      sub?.subscription?.unsubscribe?.();
+    };
   }, []);
 
   async function handleBuyCredits() {
@@ -47,22 +67,45 @@ export default function Analyze() {
     }
   }
 
+  // Run smart analysis on click. Backend should handle decrementing credits.
+  async function handleRunSmartAnalysis() {
+    if (runningSmart) return;
+    if (!resumeText.trim() || !job.trim()) {
+      alert("Provide resume text and job description first.");
+      return;
+    }
+    if (!me) {
+      alert("Please log in to run Smart Analysis.");
+      return;
+    }
+    if ((me.credits ?? 0) <= 0) {
+      alert("You don't have credits. Buy credits to use Smart Analysis.");
+      return;
+    }
 
-
-
-
-
-
+    setRunningSmart(true);
+    setSmartResult(null);
+    try {
+      const data = await smartAnalyze({ resumeText, jobText: job, jobTitle });
+      setSmartResult(data);
+      // refresh profile to pick up new credits balance from server
+      try {
+        const refreshed = await getMe();
+        setMe(refreshed);
+      } catch (e) {
+        // ignore refresh error
+      }
+    } catch (e) {
+      alert(e.message || "Smart analysis failed.");
+    } finally {
+      setRunningSmart(false);
+    }
+  }
 
   const ready = resumeText.trim().length > 0 && job.trim().length > 0;
 
   const inputRef = useRef(null);
   const onBrowseClick = () => inputRef.current?.click();
-
-
-
-
-
 
   const handleFileChosen = useCallback(async (file) => {
     if (!file) return;
@@ -76,8 +119,6 @@ export default function Analyze() {
     try {
       const text = await extractTextFromFileAPI(file);
       setResumeText(text || "");
-      console.log("[Analyze] extracted chars:", (text || "").length, "file:", file.name);
-      console.log("[Analyze] extracted head:", (text || "").slice(0, 120));
     } catch (e) {
       alert(e.message || "Could not extract text.");
       setResumeText("");
@@ -96,9 +137,6 @@ export default function Analyze() {
     setLoading(true);
     setResult(null);
     try {
-      console.log("[Analyze] resume chars:", resumeText.length);
-      console.log("[Analyze] job chars:", job.length);
-      console.log("[Analyze] resume head:", resumeText.slice(0, 120));
       const data = await scoreResume(resumeText, job);
       setResult(data);
     } catch (e) {
@@ -276,8 +314,23 @@ export default function Analyze() {
                         </button>
                       </div>
                     </div>
+                  ) : smartResult ? (
+                    <SmartSuggestions data={smartResult} resumeText={resumeText} jobText={job} jobTitle={jobTitle} />
                   ) : (
-                    <SmartSuggestions resumeText={resumeText} jobText={job} jobTitle={jobTitle} />
+                    <div className="p-6 rounded-xl border bg-white/50 text-center">
+                      <h3 className="font-semibold">Smart Analysis</h3>
+                      <p className="text-sm text-muted-foreground">Use Smart Analysis to get AI suggestions (cost: 1 credit).</p>
+                      <div className="mt-3 flex items-center justify-center gap-3">
+                        <button
+                          className="px-4 py-2 rounded-xl bg-indigo-600 text-white"
+                          onClick={handleRunSmartAnalysis}
+                          disabled={!ready || runningSmart}
+                        >
+                          {runningSmart ? "Running…" : "Run Smart Analysis"}
+                        </button>
+                        <div className="text-sm text-muted-foreground">Credits: {(me.credits ?? 0)}</div>
+                      </div>
+                    </div>
                   )}
                 </div>
               </div>
@@ -286,5 +339,4 @@ export default function Analyze() {
         </div>
       </div>
     </div>
-  );
-}
+  )};
