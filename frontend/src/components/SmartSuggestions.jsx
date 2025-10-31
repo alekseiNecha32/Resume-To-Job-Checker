@@ -81,7 +81,7 @@ export default function SmartSuggestions({ resumeText, jobText, jobTitle }) {
         disabled={loading}
         className={`px-4 py-2 rounded-xl bg-indigo-600 text-white hover:opacity-90 disabled:opacity-50`}
       >
-        {loading ? "Generating…" : "AI suggestions"}
+        {loading ? "Generating…" : "Smart Suggestions"}
       </button>
 
       {/* Panel */}

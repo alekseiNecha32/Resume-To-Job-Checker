@@ -1,6 +1,6 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useRef, useState, useEffect } from "react";
 import ResultCard from "../components/ResultCard.jsx";
-import { scoreResume, extractTextFromFileAPI } from "../services/apiClient.js";
+import { scoreResume, extractTextFromFileAPI, getMe, createCheckoutSession } from "../services/apiClient.js";
 import SmartSuggestions from "../components/SmartSuggestions.jsx";
 
 export default function Analyze() {
@@ -12,10 +12,57 @@ export default function Analyze() {
   const [result, setResult] = useState(null);
   const [jobTitle, setJobTitle] = useState("");
 
+
+
+
+  const [me, setMe] = useState(null);
+  const [loadingMe, setLoadingMe] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const u = await getMe();
+        if (mounted) setMe(u);
+      } catch {
+        if (mounted) setMe(null);
+      } finally {
+        if (mounted) setLoadingMe(false);
+      }
+    })();
+    return () => (mounted = false);
+  }, []);
+
+  async function handleBuyCredits() {
+    try {
+      const sess = await createCheckoutSession();
+      if (sess?.url) {
+        window.location.href = sess.url;
+      } else {
+        alert("Could not start checkout.");
+      }
+    } catch (e) {
+      console.error("checkout error", e);
+      alert("Could not start checkout.");
+    }
+  }
+
+
+
+
+
+
+
+
   const ready = resumeText.trim().length > 0 && job.trim().length > 0;
 
   const inputRef = useRef(null);
   const onBrowseClick = () => inputRef.current?.click();
+
+
+
+
+
 
   const handleFileChosen = useCallback(async (file) => {
     if (!file) return;
@@ -148,9 +195,7 @@ export default function Analyze() {
         {/* Action */}
         <div className="mt-8 flex justify-center">
           <button
-            className={`glass-button px-6 py-2 [background-image:var(--gradient-primary)]
-              hover:brightness-105 active:scale-[.99]
-              ${(!ready || loading || parsing) ? "opacity-60 cursor-not-allowed" : ""}`}
+            className={`px-4 py-2 rounded-xl bg-indigo-600 text-white hover:opacity-90 disabled:opacity-50`}
             onClick={handleAnalyze}
             disabled={!ready || loading || parsing}
           >
@@ -213,14 +258,27 @@ export default function Analyze() {
               </div>
 
               <div className="flex justify-center mt-8 w-full">
-
                 <div className="w-full max-w-4xl">
-
-                  <SmartSuggestions
-                    resumeText={resumeText}
-                    jobText={job}
-                    jobTitle={jobTitle}
-                  />
+                  {loadingMe ? (
+                    <div className="p-6 rounded-xl border bg-white/50 text-center">Checking account…</div>
+                  ) : !me ? (
+                    <div className="p-6 rounded-xl border bg-white/50 text-center">
+                      <h3 className="font-semibold">Smart Analysis — Login required</h3>
+                      <p className="text-sm text-muted-foreground">Please log in or sign up to access Smart Analysis.</p>
+                    </div>
+                  ) : (me.credits ?? 0) <= 0 ? (
+                    <div className="p-6 rounded-xl border bg-white/50 text-center">
+                      <h3 className="font-semibold">Smart Analysis — Locked</h3>
+                      <p className="text-sm text-muted-foreground">You have {me.credits ?? 0} credits. Buy credits to see AI suggestions.</p>
+                      <div className="mt-3">
+                        <button className="px-4 py-2 rounded-xl bg-indigo-600 text-white" onClick={handleBuyCredits}>
+                          Buy Credits
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <SmartSuggestions resumeText={resumeText} jobText={job} jobTitle={jobTitle} />
+                  )}
                 </div>
               </div>
             </div>
