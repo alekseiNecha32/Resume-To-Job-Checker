@@ -17,12 +17,14 @@ def create_app():
         resources={
             r"/api/*": {
                 "origins": ["http://localhost:5173", "http://127.0.0.1:5173"],
+                "supports_credentials": True,
                 "methods": ["GET", "POST", "OPTIONS"],
-                "allow_headers": ["Content-Type", "Authorization", "X-User-Id"],
-                "expose_headers": ["Authorization"]
+                "expose_headers": ["Content-Type", "Authorization"],
+                "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"],
             }
         },
-        supports_credentials=False,
+    
+
     )
 
     

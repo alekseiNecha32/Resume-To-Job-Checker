@@ -79,13 +79,16 @@ export async function getMe() {
 }
 
 export async function createCheckoutSession() {
-  const res = await fetch(`${API_BASE}/pay/checkout`, {
+  const res = await fetch(`${API_BASE}/payments/checkout`, { // <-- payments
     method: "POST",
-    headers: await authHeaders(),
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ /* any payload */ }),
   });
-  if (!res.ok) throw new Error("Failed to start checkout");
-  return res.json(); 
+  if (!res.ok) throw new Error("Could not start checkout.");
+  return res.json();
 }
+
 export async function scoreResumeFile({ file, job_text, job_title = null, isPro = false }) {
   const fd = new FormData();
   fd.append("file", file);

@@ -9,6 +9,7 @@ import {
 } from "../services/apiClient.js";
 import SmartSuggestions from "../components/SmartSuggestions.jsx";
 import { supabase } from "../lib/supabaseClient.js";
+import CreditsModal from "../components/CreditsModal.jsx";
 
 export default function Analyze() {
   const [resumeFile, setResumeFile] = useState(null);
@@ -53,18 +54,10 @@ export default function Analyze() {
     };
   }, []);
 
-  async function handleBuyCredits() {
-    try {
-      const sess = await createCheckoutSession();
-      if (sess?.url) {
-        window.location.href = sess.url;
-      } else {
-        alert("Could not start checkout.");
-      }
-    } catch (e) {
-      console.error("checkout error", e);
-      alert("Could not start checkout.");
-    }
+  const [showCreditsModal, setShowCreditsModal] = useState(false);
+
+  function handleBuyCredits() {
+    setShowCreditsModal(true);
   }
 
   // Run smart analysis on click. Backend should handle decrementing credits.
@@ -312,6 +305,9 @@ export default function Analyze() {
                         <button className="px-4 py-2 rounded-xl bg-indigo-600 text-white" onClick={handleBuyCredits}>
                           Buy Credits
                         </button>
+                          {showCreditsModal && (
+                            <CreditsModal onClose={() => setShowCreditsModal(false)} />
+                          )}
                       </div>
                     </div>
                   ) : smartResult ? (

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import AuthModal from "./AuthModal";
 import ProfileMenu from "./ProfileMenu";
+import CreditsModal from "./CreditsModal";
 import { getMe } from "../services/apiClient";
 import { supabase } from "../lib/supabaseClient";
 
@@ -8,6 +9,7 @@ export default function NavBar() {
   const [me, setMe] = useState(null);
   const [showAuth, setShowAuth] = useState(false);
   const [showProfile, setShowProfile] = useState(false); // <-- added
+  const [showCreditsModal, setShowCreditsModal] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -45,7 +47,13 @@ export default function NavBar() {
     if (!email) return "U";
     return email.split(/[.@]/)[0].slice(0, 2).toUpperCase();
   }
+  const handleBuyCreditsClick = () => {
+    setShowCreditsModal(true);
+  };
 
+  const handleCloseCreditsModal = () => {
+    setShowCreditsModal(false);
+  };
   return (
     <>
       <nav className="rtjc-nav">
@@ -90,8 +98,15 @@ export default function NavBar() {
       {showAuth && <AuthModal onClose={() => setShowAuth(false)} onSuccess={onAuthSuccess} />}
 
       {showProfile && me && (
-        <ProfileMenu me={me} onClose={() => setShowProfile(false)} onLogout={handleLogout} />
+        <ProfileMenu
+          me={me}
+          onClose={() => setShowProfile(false)}
+          onLogout={handleLogout}
+         onBuyCredits={() => setShowCreditsModal(true)}
+        />
       )}
+      {showCreditsModal && <CreditsModal onClose={handleCloseCreditsModal} />}
+
     </>
   );
 }
