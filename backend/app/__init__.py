@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 from app.blueprints.api import api_bp
 from app.blueprints.smart import smart_bp
 from app.blueprints.authorization import auth_bp as auth_api_bp
+from .blueprints.stripe import stripe_bp
 
 def create_app():
     load_dotenv()
@@ -31,6 +32,7 @@ def create_app():
     app.register_blueprint(api_bp)  # 
     app.register_blueprint(smart_bp)
     app.register_blueprint(auth_api_bp)
+    app.register_blueprint(stripe_bp)   # ensure this line exists
 
     @app.get("/health")
     def health():

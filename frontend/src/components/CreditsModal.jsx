@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { createCheckoutSession } from "../services/apiClient.js";
 
 export default function CreditsModal({ onClose }) {
   const [processing, setProcessing] = useState(false);
@@ -13,29 +14,31 @@ export default function CreditsModal({ onClose }) {
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  // Pricing: custom pack = $1 per credit
+  // Pricing: custom pack = $1 per credit (client preview only)
   function calcPriceForCredits(credits) {
     return Math.max(0, Math.floor(credits));
   }
 
-  async function purchasePack(credits, label) {
-    const price = calcPriceForCredits(credits);
+  // replace simulated purchase with real checkout flow
+  async function startCheckout({ packId, credits } = {}) {
     setProcessing(true);
     setMsg("");
     try {
-      // simulate network / checkout flow
-      await new Promise((r) => setTimeout(r, 700));
-      setMsg(`Purchased ${label} — ${credits} credits — $${price}`);
-    } catch {
-      setMsg("Purchase failed");
+      const payload = { packId };
+      if (packId === "custom") payload.credits = Math.max(1, Math.floor(credits || 0));
+      const data = await createCheckoutSession(payload);
+      if (data?.url) {
+        window.location.href = data.url;
+        return;
+      }
+      setMsg("Failed to create checkout session");
+    } catch (err) {
+      console.error("checkout error", err);
+      setMsg(err?.message || "Could not start checkout");
     } finally {
       setProcessing(false);
     }
   }
-
-  const packs = [
-    { id: "pro", name: "Pro Pack", price: "$5", credits: 10, note: "Most popular" },
-  ];
 
   return (
     <div
@@ -79,12 +82,10 @@ export default function CreditsModal({ onClose }) {
               <ul className="mt-4 space-y-2 text-sm text-gray-700">
                 <li>✓ 10 Smart Analyses</li>
                 <li>✓ Advanced Insights</li>
-                <li>✓ Priority Support</li>
-                <li>✓ Valid for 6 months</li>
               </ul>
 
               <button
-                onClick={() => purchasePack(10, "Pro Pack")}
+                onClick={() => startCheckout({ packId: "pro" })}
                 disabled={processing}
                 className="mt-6 w-full rounded-full bg-indigo-600 text-white py-3 font-semibold disabled:opacity-60"
               >
@@ -143,19 +144,13 @@ export default function CreditsModal({ onClose }) {
 
             <div className="mt-6 flex justify-center">
               <button
-                onClick={() => purchasePack(customCredits, `Custom ${customCredits}`)}
+                onClick={() => startCheckout({ packId: "custom", credits: customCredits })}
                 disabled={processing || customCredits < 1}
                 className="rounded-full bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 font-semibold shadow disabled:opacity-60"
-
               >
                 {processing ? "Processing…" : `Purchase for $${calcPriceForCredits(customCredits)}`}
               </button>
             </div>
-
-            <ul className="mt-6 space-y-2 text-sm text-gray-700">
-              <li>✓ Advanced Insights</li>
-              <li>✓ Valid for 6 months</li>
-            </ul>
           </div>
 
           {msg && (

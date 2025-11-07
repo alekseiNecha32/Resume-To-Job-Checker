@@ -78,17 +78,22 @@ export async function getMe() {
   return await r.json().catch(() => null);
 }
 
-export async function createCheckoutSession() {
-  const res = await fetch(`${API_BASE}/payments/checkout`, { // <-- payments
+export async function createCheckoutSession({ packId, credits } = {}) {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_BASE}/payments/checkout`, {
     method: "POST",
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ /* any payload */ }),
+    headers,
+    body: JSON.stringify({ packId, credits }),
   });
-  if (!res.ok) throw new Error("Could not start checkout.");
-  return res.json();
+  const text = await res.text();
+  let json = {};
+  try { json = text ? JSON.parse(text) : {}; } catch (e) { throw new Error("Invalid JSON from checkout"); }
+  if (!res.ok) throw new Error(json?.message || json?.error || `Checkout failed (${res.status})`);
+  return json; // { url }
 }
-
+export async function getProfile() {
+  return getMe();
+}
 export async function scoreResumeFile({ file, job_text, job_title = null, isPro = false }) {
   const fd = new FormData();
   fd.append("file", file);
