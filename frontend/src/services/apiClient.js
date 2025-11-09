@@ -52,6 +52,7 @@ export async function scoreResume(resumeText, jobText, jobTitle = "") {
   };
 }
 
+// ...existing code...
 export async function smartAnalyze({ resumeText, jobText, jobTitle }) {
   const headers = await authHeaders();
   const res = await fetch(`${API_BASE}/smart/analyze`, {
@@ -60,15 +61,25 @@ export async function smartAnalyze({ resumeText, jobText, jobTitle }) {
     body: JSON.stringify({ resume_text: resumeText, job_text: jobText, job_title: jobTitle })
   });
 
-  let j;
+  let analysis;
   try {
-    j = await res.json();
+    analysis = await res.json();
   } catch {
-    j = {};
+    analysis = null;
   }
-  if (!res.ok) throw new Error(j.error || `Smart analysis failed (${res.status})`);
-  return j;
+  if (!res.ok) throw new Error((analysis && (analysis.error || analysis.message)) || `Smart analysis failed (${res.status})`);
+
+  // best-effort refresh of profile so caller can update UI immediately
+  let profile = null;
+  try {
+    profile = await getMe();
+  } catch (e) {
+    console.debug("getMe after analyze failed", e);
+  }
+
+  return { analysis, profile };
 }
+// ...existing code...
 
 
 export async function getMe() {

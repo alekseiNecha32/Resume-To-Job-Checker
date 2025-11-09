@@ -4,12 +4,10 @@ import {
   scoreResume,
   extractTextFromFileAPI,
   getMe,
-  createCheckoutSession,
   smartAnalyze,
 } from "../services/apiClient.js";
-import SmartSuggestions from "../components/SmartSuggestions.jsx";
 import { supabase } from "../lib/supabaseClient.js";
-import CreditsModal from "../components/CreditsModal.jsx";
+import SmartSuggestions from "../components/SmartSuggestions";
 
 export default function Analyze() {
   const [resumeFile, setResumeFile] = useState(null);
@@ -76,19 +74,35 @@ export default function Analyze() {
       return;
     }
 
+    // Optimistic UI: decrement 1 immediately so user sees feedback (will be corrected from server)
+    const prevCredits = me.credits ?? 0;
+    setMe({ ...me, credits: prevCredits - 1 });
     setRunningSmart(true);
     setSmartResult(null);
+
     try {
-      const data = await smartAnalyze({ resumeText, jobText: job, jobTitle });
-      setSmartResult(data);
-      // refresh profile to pick up new credits balance from server
-      try {
-        const refreshed = await getMe();
-        setMe(refreshed);
-      } catch (e) {
-        // ignore refresh error
+      const { analysis, profile: refreshedProfile } = await smartAnalyze({
+        resumeText,
+        jobText: job,
+        jobTitle,
+      });
+
+      // show analysis
+      setSmartResult(analysis);
+
+      // apply server profile if present (ensures exact final balance)
+      if (refreshedProfile) {
+        setMe(refreshedProfile);
+      } else {
+        // best-effort refresh
+        try {
+          const refreshed = await getMe();
+          if (refreshed) setMe(refreshed);
+        } catch (_e) { }
       }
     } catch (e) {
+      // rollback optimistic decrement on error
+      setMe({ ...me, credits: prevCredits });
       alert(e.message || "Smart analysis failed.");
     } finally {
       setRunningSmart(false);
@@ -290,44 +304,39 @@ export default function Analyze() {
 
               <div className="flex justify-center mt-8 w-full">
                 <div className="w-full max-w-4xl">
-                  {loadingMe ? (
-                    <div className="p-6 rounded-xl border bg-white/50 text-center">Checking account…</div>
-                  ) : !me ? (
-                    <div className="p-6 rounded-xl border bg-white/50 text-center">
-                      <h3 className="font-semibold">Smart Analysis — Login required</h3>
-                      <p className="text-sm text-muted-foreground">Please log in or sign up to access Smart Analysis.</p>
-                    </div>
-                  ) : (me.credits ?? 0) <= 0 ? (
-                    <div className="p-6 rounded-xl border bg-white/50 text-center">
-                      <h3 className="font-semibold">Smart Analysis — Locked</h3>
-                      <p className="text-sm text-muted-foreground">You have {me.credits ?? 0} credits. Buy credits to see AI suggestions.</p>
-                      <div className="mt-3">
-                        <button className="px-4 py-2 rounded-xl bg-indigo-600 text-white" onClick={handleBuyCredits}>
-                          Buy Credits
-                        </button>
-                          {showCreditsModal && (
-                            <CreditsModal onClose={() => setShowCreditsModal(false)} />
-                          )}
+
+
+                  <div className="flex justify-center mt-8 w-full">
+                    <div className="w-full max-w-4xl">
+                      <div className="p-6 rounded-xl border bg-white/50 text-center">
+                        <h3 className="font-semibold">Smart Analysis</h3>
+                        <p className="text-sm text-muted-foreground">Use Smart Analysis to get AI suggestions (cost: 1 credit).</p>
+                        <div className="mt-3 flex items-center justify-center gap-3">
+                          <button
+                            onClick={handleRunSmartAnalysis}
+                            disabled={runningSmart || ((me?.credits ?? 0) <= 0)}
+                            className="px-6 py-3 rounded-xl bg-indigo-600 text-white disabled:opacity-50"
+                          >
+                            {runningSmart ? "Analyzing…" : "Run Smart Analysis"}
+                          </button>
+                          <div className="text-sm text-muted-foreground">Credits: {me?.credits ?? 0}</div>
+                        </div>
+
+                        {/* Render the suggestions panel when smartResult is present */}
+                        {smartResult && (
+                          <div className="mt-6">
+                            <SmartSuggestions
+                              data={smartResult}
+                              resumeText={resumeText}
+                              jobText={job}
+                              jobTitle={jobTitle}
+                            />
+                          </div>
+                        )}
                       </div>
                     </div>
-                  ) : smartResult ? (
-                    <SmartSuggestions data={smartResult} resumeText={resumeText} jobText={job} jobTitle={jobTitle} />
-                  ) : (
-                    <div className="p-6 rounded-xl border bg-white/50 text-center">
-                      <h3 className="font-semibold">Smart Analysis</h3>
-                      <p className="text-sm text-muted-foreground">Use Smart Analysis to get AI suggestions (cost: 1 credit).</p>
-                      <div className="mt-3 flex items-center justify-center gap-3">
-                        <button
-                          className="px-4 py-2 rounded-xl bg-indigo-600 text-white"
-                          onClick={handleRunSmartAnalysis}
-                          disabled={!ready || runningSmart}
-                        >
-                          {runningSmart ? "Running…" : "Run Smart Analysis"}
-                        </button>
-                        <div className="text-sm text-muted-foreground">Credits: {(me.credits ?? 0)}</div>
-                      </div>
-                    </div>
-                  )}
+                  </div>
+
                 </div>
               </div>
             </div>
@@ -335,4 +344,5 @@ export default function Analyze() {
         </div>
       </div>
     </div>
-  )};
+  )
+};

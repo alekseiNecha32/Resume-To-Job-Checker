@@ -1,16 +1,33 @@
-import { useState } from "react";
+// ...existing code...
+import { useState, useEffect } from "react";
 import { smartAnalyze, getMe, createCheckoutSession } from "../services/apiClient";
 import AuthBox from "./AuthBox";
 
-export default function SmartSuggestions({ resumeText, jobText, jobTitle }) {
+export default function SmartSuggestions({ resumeText, jobText, jobTitle, data: initialData = null }) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [data, setData] = useState(null);
+  const [data, setData] = useState(initialData);
   const [err, setErr] = useState(null);
   const [needAuth, setNeedAuth] = useState(false);
 
+  // If parent passes data, open panel and display it (do NOT call smartAnalyze again)
+  useEffect(() => {
+    if (initialData) {
+      setData(initialData);
+      setErr(null);
+      setNeedAuth(false);
+      setOpen(true);
+    }
+  }, [initialData]);
+
   const run = async () => {
-    if (loading) return; 
+    // If caller already provided data, just open the panel
+    if (initialData) {
+      setOpen(true);
+      return;
+    }
+
+    if (loading) return;
     if (!resumeText || !jobText) {
       setOpen(true);
       setErr("Please provide resume text and job description first.");
@@ -34,7 +51,9 @@ export default function SmartSuggestions({ resumeText, jobText, jobTitle }) {
 
       // call analysis
       const res = await smartAnalyze({ resumeText, jobText, jobTitle });
-      setData(res);
+      // smartAnalyze returns { analysis, profile } in your apiClient; support both shapes:
+      const payload = res?.analysis ?? res ?? null;
+      setData(payload);
     } catch (e) {
       const msg = String(e?.message || "Something went wrong");
 
@@ -75,14 +94,16 @@ export default function SmartSuggestions({ resumeText, jobText, jobTitle }) {
 
   return (
     <div className="w-full flex flex-col items-center mt-6">
-      {/* Centered trigger */}
-      <button
-        onClick={run}
-        disabled={loading}
-        className={`px-4 py-2 rounded-xl bg-indigo-600 text-white hover:opacity-90 disabled:opacity-50`}
-      >
-        {loading ? "Generating…" : "Smart Suggestions"}
-      </button>
+      {/* Centered trigger - only used when not provided data from parent */}
+      {!initialData && (
+        <button
+          onClick={run}
+          disabled={loading}
+          className={`px-4 py-2 rounded-xl bg-indigo-600 text-white hover:opacity-90 disabled:opacity-50`}
+        >
+          {loading ? "Generating…" : "Smart Suggestions"}
+        </button>
+      )}
 
       {/* Panel */}
       {open && (
@@ -236,3 +257,4 @@ export default function SmartSuggestions({ resumeText, jobText, jobTitle }) {
     </div>
   );
 }
+// ...existing code...

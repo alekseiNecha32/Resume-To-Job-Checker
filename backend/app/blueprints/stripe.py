@@ -119,6 +119,7 @@ def checkout():
         return jsonify({"error": "internal_server_error"}), 500
 
 
+# ...existing code...
 @stripe_bp.post("/webhook")
 def webhook():
     """
@@ -129,12 +130,14 @@ def webhook():
     sig_header = request.headers.get("Stripe-Signature")
     event = None
 
-
     # debug: log raw payload (trimmed) and signature header
     try:
-       current_app.logger.debug("Stripe webhook raw payload (trim): %s", (payload.decode("utf-8", "replace")[:2000] if payload else ""))
+        current_app.logger.debug(
+            "Stripe webhook raw payload (trim): %s",
+            (payload.decode("utf-8", "replace")[:2000] if payload else ""),
+        )
     except Exception:
-       current_app.logger.debug("Stripe webhook raw payload (binary) present")
+        current_app.logger.debug("Stripe webhook raw payload (binary) present")
     current_app.logger.debug("Stripe-Signature header: %s", sig_header)
 
     try:
@@ -155,7 +158,8 @@ def webhook():
             session.get("payment_status") or session.get("status"),
             session.get("amount_total"),
             session.get("metadata"),
-           )
+        )
+
         # ensure payment is completed
         payment_status = session.get("payment_status") or session.get("status")
         if payment_status != "paid":
@@ -163,12 +167,11 @@ def webhook():
             return jsonify({"received": True}), 200
 
         stripe_session_id = session.get("id")
+
         # check idempotency: has this session already been recorded?
         try:
-            already = None
             if SUPABASE:
                 res = SUPABASE.table("purchases").select("id").eq("stripe_session_id", stripe_session_id).limit(1).execute()
-                # adapt to supabase client result shape
                 already_rows = getattr(res, "data", None) or (res.get("data") if isinstance(res, dict) else None)
                 if already_rows:
                     current_app.logger.info("Purchase already recorded for session %s, skipping", stripe_session_id)
@@ -184,10 +187,15 @@ def webhook():
             credits = 0
         amount_total = int(session.get("amount_total") or 0)
 
+        # quick guards / logging
+        if credits <= 0:
+            current_app.logger.warning("Session %s has non-positive credits=%s; recording but not granting", stripe_session_id, credits)
+
         try:
             if SUPABASE and uid:
                 # ensure profile exists
                 SUPABASE.table("profiles").upsert({"user_id": uid}).execute()
+
                 # preferred: use RPC to increment credits
                 try:
                     SUPABASE.rpc("increment_profile_credits", {"p_user_id": uid, "p_delta": credits}).execute()
@@ -203,16 +211,24 @@ def webhook():
                     SUPABASE.table("profiles").update({"credits": current_credits + credits}).eq("user_id", uid).execute()
                     current_app.logger.info("Updated user %s credits from %s to %s (fallback)", uid, current_credits, current_credits + credits)
 
-
-                # insert purchase record (mark completed)
-                SUPABASE.table("purchases").insert({
+            # insert purchase record (mark completed) — run regardless of uid to keep audit trail
+            try:
+                ins = SUPABASE.table("purchases").insert({
                     "user_id": uid,
                     "amount_cents": amount_total,
                     "credits_granted": credits,
                     "status": "COMPLETED",
                     "stripe_session_id": stripe_session_id,
                 }).execute()
-                current_app.logger.info("Inserted purchase record for session %s user %s credits %s", stripe_session_id, uid, credits)
+                current_app.logger.info(
+                    "Inserted purchase record for session %s user %s credits %s result=%s",
+                    stripe_session_id,
+                    uid,
+                    credits,
+                    getattr(ins, "data", ins),
+                )
+            except Exception:
+                current_app.logger.exception("Failed to insert purchase record")
         except Exception:
             current_app.logger.exception("failed to persist purchase")
 
