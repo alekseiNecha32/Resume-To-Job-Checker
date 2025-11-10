@@ -1,35 +1,20 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import AuthModal from "./AuthModal";
 import ProfileMenu from "./ProfileMenu";
 import CreditsModal from "./CreditsModal";
-import { getMe } from "../services/apiClient";
 import { supabase } from "../lib/supabaseClient";
+import { useMe } from "../context/MeContext.jsx";
 
 export default function NavBar() {
-  const [me, setMe] = useState(null);
+  // Use global profile from context so credits stay in sync everywhere
+  const { me, setMe } = useMe();
   const [showAuth, setShowAuth] = useState(false);
   const [showProfile, setShowProfile] = useState(false); // <-- added
   const [showCreditsModal, setShowCreditsModal] = useState(false);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const u = await getMe();
-        setMe(u);
-      } catch {
-        setMe(null);
-      }
-    })();
-  }, []);
-
   async function onAuthSuccess() {
+    // Close modal; MeProvider will refresh on auth state change
     setShowAuth(false);
-    try {
-      const u = await getMe();
-      setMe(u);
-    } catch {
-      setMe(null);
-    }
   }
 
   async function handleLogout() {

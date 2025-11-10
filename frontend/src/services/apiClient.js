@@ -15,15 +15,15 @@ export async function authHeaders() {
     headers["Authorization"] = `Bearer ${session.access_token}`;
     return headers;
   }
-    const devUid = import.meta.env.VITE_DEV_USER_ID;
-    if (devUid) {
-        console.log("DEBUG using dev X-User-Id:", devUid);
-        headers["X-User-Id"] = devUid;
-        return headers;
-    }
-
-    console.warn("DEBUG no session found; calling API without auth headers");
+  const devUid = import.meta.env.VITE_DEV_USER_ID;
+  if (devUid) {
+    console.log("DEBUG using dev X-User-Id:", devUid);
+    headers["X-User-Id"] = devUid;
     return headers;
+  }
+
+  console.warn("DEBUG no session found; calling API without auth headers");
+  return headers;
 }
 
 export async function scoreResume(resumeText, jobText, jobTitle = "") {
@@ -40,7 +40,7 @@ export async function scoreResume(resumeText, jobText, jobTitle = "") {
 
 
   if (typeof data.score === "number") {
-    return data; 
+    return data;
   }
 
   const similarity = typeof data.similarity === "number" ? data.similarity : 0;
@@ -69,6 +69,8 @@ export async function smartAnalyze({ resumeText, jobText, jobTitle }) {
   }
   if (!res.ok) throw new Error((analysis && (analysis.error || analysis.message)) || `Smart analysis failed (${res.status})`);
 
+  const payload = (analysis && (analysis.data || analysis.result || analysis.analysis)) || analysis || null;
+
   // best-effort refresh of profile so caller can update UI immediately
   let profile = null;
   try {
@@ -77,7 +79,7 @@ export async function smartAnalyze({ resumeText, jobText, jobTitle }) {
     console.debug("getMe after analyze failed", e);
   }
 
-  return { analysis, profile };
+  return { analysis: payload, profile };
 }
 // ...existing code...
 

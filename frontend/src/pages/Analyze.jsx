@@ -76,7 +76,9 @@ export default function Analyze() {
 
     // Optimistic UI: decrement 1 immediately so user sees feedback (will be corrected from server)
     const prevCredits = me.credits ?? 0;
-    setMe({ ...me, credits: prevCredits - 1 });
+    const optimistic = { ...me, credits: prevCredits - 1 };
+    setMe(optimistic);
+    try { window.dispatchEvent(new CustomEvent("profile_updated", { detail: optimistic })); } catch (_e) { }
     setRunningSmart(true);
     setSmartResult(null);
 
@@ -87,18 +89,26 @@ export default function Analyze() {
         jobTitle,
       });
 
+      const payload = (analysis && (analysis.data || analysis.result || analysis.analysis)) || analysis || null;
+
       // show analysis
-      setSmartResult(analysis);
+      setSmartResult(payload);
 
       // apply server profile if present (ensures exact final balance)
       if (refreshedProfile) {
-        setMe(refreshedProfile);
-      } else {
-        // best-effort refresh
+        setMe(refreshedProfile); // existing state setter
+        // notify any other listeners
         try {
-          const refreshed = await getMe();
-          if (refreshed) setMe(refreshed);
+          window.dispatchEvent(new CustomEvent("profile_updated", { detail: refreshedProfile }));
         } catch (_e) { }
+      } else {
+        const refreshed = await getMe().catch(() => null);
+        if (refreshed) {
+          setMe(refreshed);
+          try {
+            window.dispatchEvent(new CustomEvent("profile_updated", { detail: refreshed }));
+          } catch (_e) { }
+        }
       }
     } catch (e) {
       // rollback optimistic decrement on error
