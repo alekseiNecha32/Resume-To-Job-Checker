@@ -5,7 +5,7 @@ import { supabase } from "../lib/supabaseClient";
 const MeContext = createContext(null);
 
 export function MeProvider({ children }) {
-  // Initialize from cache synchronously to avoid auth flicker after redirects
+  // Initialize from cache synchronously to avoid any logged-off flicker after redirects
   const [me, setMe] = useState(() => {
     try {
       const raw = localStorage.getItem("cachedProfile");
@@ -18,6 +18,7 @@ export function MeProvider({ children }) {
 
   useEffect(() => {
     let mounted = true;
+
     async function load() {
       try {
         const u = await getMe();
@@ -26,42 +27,29 @@ export function MeProvider({ children }) {
           try { localStorage.setItem("cachedProfile", JSON.stringify(u)); } catch {}
           return;
         }
-        // Fallback: if backend is down or unauthorized, still reflect Supabase auth
+        // Fallback: reflect Supabase auth user without clearing existing profile
         const { data } = await supabase.auth.getUser();
         const user = data?.user;
         if (mounted && user) {
-          const fallback = {
+          setMe(prev => ({
             user_id: user.id,
             email: user.email,
-            full_name: user.user_metadata?.full_name || null,
-            credits: 0, // unknown until backend responds
-          };
-          setMe(fallback);
-          try { localStorage.setItem("cachedProfile", JSON.stringify(fallback)); } catch {}
+            full_name: user.user_metadata?.full_name || prev?.full_name || null,
+            credits: prev?.credits ?? 0,
+          }));
         }
       } catch {
-        // On error, try to at least get the supabase user
-        try {
-          const { data } = await supabase.auth.getUser();
-          const user = data?.user;
-          if (mounted && user) {
-            const fallback = { user_id: user.id, email: user.email, full_name: user.user_metadata?.full_name || null, credits: 0 };
-            setMe(fallback);
-            try { localStorage.setItem("cachedProfile", JSON.stringify(fallback)); } catch {}
-          } else if (mounted) {
-            setMe(null);
-          }
-        } catch {
-          if (mounted) setMe(null);
-        }
+        // keep previous me; no nulling to avoid flicker
       } finally {
         if (mounted) setLoading(false);
       }
     }
+
     load();
 
-    // refresh on auth changes
+    // refresh on auth changes but keep existing UI state
     const { data: sub } = supabase.auth.onAuthStateChange(() => {
+      // Refresh in background to avoid visible flicker
       load();
     });
 
@@ -83,8 +71,15 @@ export function MeProvider({ children }) {
     };
   }, []);
 
+  // Persist latest profile for instant rehydration next mount
+  useEffect(() => {
+    try {
+      if (me) localStorage.setItem("cachedProfile", JSON.stringify(me));
+    } catch {}
+  }, [me]);
+
   return (
-    <MeContext.Provider value={{ me, setMe, loading }}>
+    <MeContext.Provider value={{ me, setMe, loading, hasProfile: !!me }}>
       {children}
     </MeContext.Provider>
   );

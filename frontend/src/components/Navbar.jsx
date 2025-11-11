@@ -52,8 +52,14 @@ export default function NavBar() {
 
         <div className="rtjc-actions">
           {loading ? (
-            // Avoid "logged out" flicker while context hydrates
-            <div style={{ width: 160, height: 36 }} />
+            // Subtle skeleton to avoid visible disappearance
+            <div className="rtjc-profile" aria-busy="true" aria-live="polite">
+              <div className="rtjc-avatar rtjc-skeleton" />
+              <div className="rtjc-meta">
+                <div className="rtjc-email rtjc-skeleton-line" style={{ width: 140 }} />
+                <div className="rtjc-credits rtjc-skeleton-line" style={{ width: 90, marginTop: 4 }} />
+              </div>
+            </div>
           ) : !me ? (
             <>
               <button className="btn btn-ghost" onClick={() => setShowAuth(true)}>
