@@ -13,9 +13,34 @@ export function MeProvider({ children }) {
     async function load() {
       try {
         const u = await getMe();
-        if (mounted) setMe(u);
+        if (mounted && u) {
+          setMe(u);
+          return;
+        }
+        // Fallback: if backend is down or unauthorized, still reflect Supabase auth
+        const { data } = await supabase.auth.getUser();
+        const user = data?.user;
+        if (mounted && user) {
+          setMe({
+            user_id: user.id,
+            email: user.email,
+            full_name: user.user_metadata?.full_name || null,
+            credits: 0, // unknown until backend responds
+          });
+        }
       } catch {
-        if (mounted) setMe(null);
+        // On error, try to at least get the supabase user
+        try {
+          const { data } = await supabase.auth.getUser();
+          const user = data?.user;
+          if (mounted && user) {
+            setMe({ user_id: user.id, email: user.email, full_name: user.user_metadata?.full_name || null, credits: 0 });
+          } else if (mounted) {
+            setMe(null);
+          }
+        } catch {
+          if (mounted) setMe(null);
+        }
       } finally {
         if (mounted) setLoading(false);
       }

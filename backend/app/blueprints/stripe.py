@@ -91,6 +91,10 @@ def checkout():
 
 
     product_name = f"{'Custom' if pack_id not in PACKS else pack_id} — {credits} credits"
+    # Use caller's origin if available to avoid cross-origin session surprises after redirect
+    origin = (request.headers.get("Origin") or FRONTEND_URL or "").rstrip("/")
+    if not origin:
+        origin = "http://localhost:5173"
     try:
         session = stripe.checkout.Session.create(
             payment_method_types=["card"],
@@ -106,8 +110,8 @@ def checkout():
                 }
             ],
             metadata={"user_id": user_id, "pack_id": pack_id or "custom", "credits": str(credits)},
-            success_url=f"{FRONTEND_URL}/pay/success?session_id={{CHECKOUT_SESSION_ID}}",
-            cancel_url=f"{FRONTEND_URL}/pay/cancel",
+            success_url=f"{origin}/pay/success?session_id={{CHECKOUT_SESSION_ID}}",
+            cancel_url=f"{origin}/pay/cancel",
         )
         current_app.logger.info("created stripe session id=%s url=%s", session.get("id"), session.get("url"))
         return jsonify({"url": session.get("url")}), 200

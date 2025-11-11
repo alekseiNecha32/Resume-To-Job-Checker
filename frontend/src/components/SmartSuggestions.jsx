@@ -92,6 +92,22 @@ export default function SmartSuggestions({ resumeText, jobText, jobTitle, data: 
     setNeedAuth(false);
   };
 
+  const fit = Number(data?.fit_estimate ?? 0);
+  const ringStyle = (pct) => ({
+    background: `conic-gradient(hsl(var(--primary)) ${Math.min(100, Math.max(0, pct)) * 3.6}deg, rgba(2,6,23,0.08) 0deg)`,
+  });
+
+  const colorForSection = (sec = "") => {
+    const s = String(sec).toLowerCase();
+    if (s.includes("experience")) return "sa-c-indigo";
+    if (s.includes("project")) return "sa-c-emerald";
+    if (s.includes("summary")) return "sa-c-sky";
+    if (s.includes("education")) return "sa-c-purple";
+    if (s.includes("skill")) return "sa-c-amber";
+    if (s.includes("achievement") || s.includes("impact")) return "sa-c-rose";
+    return "sa-c-slate";
+  };
+
   return (
     <div className="w-full flex flex-col items-center mt-6">
       {/* Centered trigger - only used when not provided data from parent */}
@@ -107,14 +123,26 @@ export default function SmartSuggestions({ resumeText, jobText, jobTitle, data: 
 
       {/* Panel */}
       {open && (
-        <div className="relative mx-auto mt-4 w-full max-w-4xl rounded-2xl border bg-white/70 backdrop-blur p-6 shadow-sm">
-          <h3 className="text-center font-semibold">Smart Suggestions</h3>
-          <button
-            onClick={closePanel}
-            className="absolute right-4 top-4 text-sm px-2 py-1 rounded-md border hover:bg-gray-50"
-          >
-            Close
-          </button>
+        <div className="sa-panel relative mx-auto mt-4 w-full max-w-5xl rounded-2xl border shadow-elevated overflow-hidden">
+          {/* Header */}
+          <div className="sa-header relative">
+            <div className="sa-header-bg" />
+            <div className="relative z-10 flex items-center justify-between gap-4 p-5">
+              <div>
+                <div className="text-xs uppercase tracking-wider text-white/80">AI Powered</div>
+                <h3 className="text-xl sm:text-2xl font-semibold text-white">Smart Suggestions</h3>
+              </div>
+              <button
+                onClick={closePanel}
+                className="sa-close"
+                aria-label="Close"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+
+          <div className="sa-body p-6 sm:p-8 bg-white/70 backdrop-blur">
 
           {/* States */}
           {err && (
@@ -124,7 +152,7 @@ export default function SmartSuggestions({ resumeText, jobText, jobTitle, data: 
               {err.includes("credits") && (
                 <button
                   onClick={onBuyClick}
-                  className="mt-3 inline-flex px-3 py-2 rounded-lg bg-indigo-600 text-white"
+                  className="mt-3 inline-flex px-4 py-2 rounded-xl bg-indigo-600 text-white shadow hover:opacity-90"
                 >
                   Buy 7 Smart Analyses — $7
                 </button>
@@ -133,8 +161,9 @@ export default function SmartSuggestions({ resumeText, jobText, jobTitle, data: 
           )}
 
           {!err && loading && (
-            <div className="mt-4 text-center animate-pulse text-sm opacity-70">
-              Analyzing your resume against the job description…
+            <div className="mt-6 flex flex-col items-center gap-3 text-sm opacity-80">
+              <div className="sa-spinner" aria-hidden />
+              <div>Analyzing your resume against the job description…</div>
             </div>
           )}
 
@@ -152,86 +181,80 @@ export default function SmartSuggestions({ resumeText, jobText, jobTitle, data: 
 
           {/* Results */}
           {data && !needAuth && !loading && (
-            <div className="mt-5 grid gap-4 md:grid-cols-2">
-              {/* Fit */}
-              <div className="p-3 rounded-xl border">
-                <div className="text-sm opacity-60">Fit Estimate</div>
-                <div className="text-3xl font-bold">{data.fit_estimate}%</div>
-                <div className="text-xs opacity-60">
-                  Heuristic only — not an ATS guarantee.
+            <div className="mt-4 grid gap-6 md:grid-cols-2">
+              {/* Fit estimate ring */}
+              <div className="sa-card flex items-center gap-5">
+                <div className="sa-ring" style={ringStyle(fit)}>
+                  <div className="sa-ring-inner">
+                    <div className="text-2xl font-bold">{fit}%</div>
+                    <div className="text-[10px] uppercase tracking-wide opacity-60">Fit</div>
+                  </div>
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  <div className="font-semibold text-foreground">Fit estimate</div>
+                  <div className="text-xs opacity-70">Heuristic only — not an ATS guarantee.</div>
                 </div>
               </div>
 
               {/* Critical gaps */}
-              <div className="p-3 rounded-xl border">
-                <div className="text-sm opacity-60 mb-1">Top Critical Gaps</div>
-                <div className="flex flex-wrap gap-2">
+              <div className="sa-card">
+                <div className="sa-card-title">Top Critical Gaps</div>
+                <div className="sa-pill-cloud sa-pill-amber">
                   {(data.critical_gaps || []).map((k) => (
-                    <span
-                      key={`cg-${k}`}
-                      className="px-2 py-1 text-xs border rounded-full bg-amber-50"
-                    >
-                      {k}
-                    </span>
+                    <span key={`cg-${k}`} className="sa-pill">{k}</span>
                   ))}
                 </div>
               </div>
 
               {/* Present */}
-              <div className="p-3 rounded-xl border">
-                <div className="text-sm opacity-60 mb-1">Matched (Expanded)</div>
-                <div className="flex flex-wrap gap-2">
+              <div className="sa-card">
+                <div className="sa-card-title">Matched (Expanded)</div>
+                <div className="sa-pill-cloud sa-pill-green">
                   {(data.present_skills || []).map((k) => (
-                    <span
-                      key={`ps-${k}`}
-                      className="px-2 py-1 text-xs border rounded-full bg-emerald-50"
-                    >
-                      {k}
-                    </span>
+                    <span key={`ps-${k}`} className="sa-pill">{k}</span>
                   ))}
                 </div>
               </div>
 
               {/* Missing */}
-              <div className="p-3 rounded-xl border">
-                <div className="text-sm opacity-60 mb-1">Missing (Smart)</div>
-                <div className="flex flex-wrap gap-2">
+              <div className="sa-card">
+                <div className="sa-card-title">Missing (Smart)</div>
+                <div className="sa-pill-cloud sa-pill-rose">
                   {(data.missing_skills || []).map((k) => (
-                    <span
-                      key={`ms-${k}`}
-                      className="px-2 py-1 text-xs border rounded-full bg-rose-50"
-                    >
-                      {k}
-                    </span>
+                    <span key={`ms-${k}`} className="sa-pill">{k}</span>
                   ))}
                 </div>
               </div>
 
-              {/* Section suggestions */}
-              <div className="md:col-span-2 p-3 rounded-xl border">
-                <div className="text-sm opacity-60 mb-1">Personal Suggestions</div>
-                <ul className="list-disc pl-5 text-sm space-y-1">
-                  {Object.entries(data.section_suggestions || {}).flatMap(
-                    ([sec, arr]) =>
-                      (arr || []).map((s, i) => (
-                        <li key={`${sec}-${i}`}>
-                          <b>{sec}:</b> {s}
+              {/* Personal suggestions */}
+              <div className="md:col-span-2 sa-card">
+                <div className="sa-card-title">Personal Suggestions</div>
+                <ul className="sa-suggest-list">
+                  {Object.entries(data.section_suggestions || {}).flatMap(([sec, arr]) =>
+                    (arr || []).map((s, i) => {
+                      const color = colorForSection(sec);
+                      return (
+                        <li key={`${sec}-${i}`} className={`sa-suggest-item ${color}`}>
+                          <span className="sa-dot" aria-hidden />
+                          <span className="sa-badge" aria-label={`${sec} badge`}>{sec}</span>
+                          <span className="sa-suggest-text">{s}</span>
                         </li>
-                      ))
+                      );
+                    })
                   )}
                 </ul>
               </div>
 
-              {/* Bullets */}
-              <div className="md:col-span-2 p-3 rounded-xl border">
-                <div className="text-sm opacity-60 mb-1">Ready-to-use Bullets</div>
-                <ul className="list-disc pl-5 text-sm space-y-1">
+              {/* Bullets with copy */}
+              <div className="md:col-span-2 sa-card">
+                <div className="sa-card-title">Ready-to-use Bullets</div>
+                <ul className="sa-list">
                   {(data.ready_bullets || []).map((b, i) => (
                     <li key={`rb-${i}`} className="flex items-start gap-2">
                       <span>{b}</span>
                       <button
-                        className="ml-auto text-xs px-2 py-0.5 rounded border hover:bg-gray-50"
-                        onClick={() => navigator.clipboard.writeText(b)}
+                        className="sa-copy ml-auto"
+                        onClick={async () => { await navigator.clipboard.writeText(b); }}
                         title="Copy"
                       >
                         Copy
@@ -242,9 +265,9 @@ export default function SmartSuggestions({ resumeText, jobText, jobTitle, data: 
               </div>
 
               {/* Rewrite hints */}
-              <div className="md:col-span-2 p-3 rounded-xl border">
-                <div className="text-sm opacity-60 mb-1">Rewrite Hints</div>
-                <ul className="list-disc pl-5 text-sm space-y-1">
+              <div className="md:col-span-2 sa-card">
+                <div className="sa-card-title">Rewrite Hints</div>
+                <ul className="sa-list">
                   {(data.rewrite_hints || []).map((h, i) => (
                     <li key={`rh-${i}`}>{h}</li>
                   ))}
@@ -252,6 +275,7 @@ export default function SmartSuggestions({ resumeText, jobText, jobTitle, data: 
               </div>
             </div>
           )}
+          </div>
         </div>
       )}
     </div>

@@ -1,26 +1,42 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { getProfile } from "../services/apiClient";
+import { useMe } from "../context/MeContext.jsx";
 
 export default function PaySuccess() {
   const [msg, setMsg] = useState("Processing payment...");
+  const { setMe } = useMe();
 
   useEffect(() => {
-    async function refreshProfile() {
+    let active = true;
+    const qs = new URLSearchParams(window.location.search);
+    const sessionId = qs.get("session_id");
+
+    async function tryRefresh(attempt = 1) {
       try {
         const json = await getProfile();
-        if (!json) {
-          setMsg("Payment succeeded but failed to refresh profile.");
+        if (json) {
+          try { setMe?.(prev => ({ ...(prev || {}), ...json })); } catch {}
+          try { window.dispatchEvent(new CustomEvent("profile_updated", { detail: json })); } catch {}
+          if (!active) return;
+          setMsg("Payment successful — credits added. Redirecting...");
+          setTimeout(() => (window.location.href = "/"), 1000);
           return;
         }
-        // optionally update global state / context here if you have one
-        setMsg("Payment successful — credits added. Redirecting...");
-        setTimeout(() => (window.location.href = "/"), 1200);
-      } catch (err) {
-        setMsg("Payment succeeded but could not refresh profile.");
+      } catch {}
+
+      if (!active) return;
+      if (attempt < 8) {
+        setMsg(`Payment processed. Syncing profile… (${attempt}/8)`);
+        setTimeout(() => tryRefresh(attempt + 1), 800);
+      } else {
+        setMsg("Payment succeeded but failed to refresh profile.");
       }
     }
-    refreshProfile();
-  }, []);
+
+    // Start refresh attempts; webhook can take a moment
+    tryRefresh(1);
+    return () => { active = false; };
+  }, [setMe]);
 
   return (
     <div className="p-8">

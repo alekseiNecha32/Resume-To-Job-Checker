@@ -91,6 +91,18 @@ export async function getMe() {
   return await r.json().catch(() => null);
 }
 
+export async function updateProfile(fields) {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_BASE}/profile`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(fields || {})
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(data?.error || data?.message || `Update failed (${res.status})`);
+  return data;
+}
+
 export async function createCheckoutSession({ packId, credits } = {}) {
   const headers = await authHeaders();
   const res = await fetch(`${API_BASE}/payments/checkout`, {
