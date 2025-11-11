@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from typing import List, Dict, Tuple
+import re
 
 import numpy as np
 from sentence_transformers import SentenceTransformer, util
@@ -74,8 +75,32 @@ def _tfidf_terms(jd: str, resume: str, limit=150) -> List[str]:
     order = np.argsort(-weights)
     return [vocab[i] for i in order if len(vocab[i]) >= 3][:limit]
 
+NOISE_SUBSTRINGS = [
+    # compliance / legal / HR boilerplate
+    "country", "qualification", "qualifications", "citizenship", "right to work", "authorization",
+    "sponsorship", "visa", "work permit", "background check", "drug", "eeo", "equal opportunity",
+    "accommodation", "disability", "veteran", "race", "religion", "gender", "national origin",
+    # non-skill logistics
+    "salary", "pay range", "benefits", "compensation", "location", "remote", "hybrid", "on-site",
+    # misc non-actionable
+    "country qualifications", "must be able", "strong communication", "fast-paced", "self-starter"
+]
+
+def _is_noisy_phrase(p: str) -> bool:
+    p_l = p.lower().strip()
+    if len(p_l) <= 2:
+        return True
+    # drop phrases that are purely letters and generic job boilerplate
+    for sub in NOISE_SUBSTRINGS:
+        if sub in p_l:
+            return True
+    # overly generic phrases (no letters+digits/symbols and >4 words)
+    if len(p_l.split()) > 4 and not re.search(r"[0-9#\.+\-/]", p_l):
+        return True
+    return False
+
 def _top_job_phrases(job_text: str, resume_text: str, top_k: int = 40) -> List[str]:
-    """Job-only phrases via TF-IDF (1–3 grams) + KeyBERT ranking."""
+    """Job-only phrases via TF-IDF (1–3 grams) + KeyBERT ranking (with noise filtering)."""
     tfidf = TfidfVectorizer(
         ngram_range=(1,3),
         stop_words="english",
@@ -93,7 +118,7 @@ def _top_job_phrases(job_text: str, resume_text: str, top_k: int = 40) -> List[s
     kb = [t for t in _keybert_terms(job_text, top_n=top_k) if t not in tfidf_top]
     seen, out = set(), []
     for p in tfidf_top + kb:
-        if len(p) >= 3 and p not in seen:
+        if len(p) >= 3 and p not in seen and not _is_noisy_phrase(p):
             out.append(p); seen.add(p)
     return out[:top_k]
 
@@ -152,11 +177,15 @@ def _compose_auto_suggestions(job_text: str, resume_text: str,
                               present_skills: List[str], missing_skills: List[str],
                               job_title: str) -> Tuple[Dict[str, List[str]], List[str]]:
     top = _top_job_phrases(job_text, resume_text, top_k=40)
+    # guard again against any noisy leftovers
+    top = [p for p in top if not _is_noisy_phrase(p)]
     missing_phr = _sem_not_covered(top, resume_text, thr=0.78)
     themes = _cluster_themes(missing_phr, max_k=4)
 
     exp: List[str] = []
     for rep, items in list(themes.items())[:4]:
+        if _is_noisy_phrase(rep):
+            continue
         ex = [w for w in items if w != rep][:2]
         if ex:
             exp.append(f"Add an experience bullet showing **{rep}** (e.g., {', '.join(ex)}) with a measurable outcome.")
@@ -164,7 +193,7 @@ def _compose_auto_suggestions(job_text: str, resume_text: str,
             exp.append(f"Add an experience bullet showing **{rep}** with a measurable outcome.")
 
     prj: List[str] = []
-    top_keys = list(themes.keys())[:3]
+    top_keys = [k for k in list(themes.keys()) if not _is_noisy_phrase(k)][:3]
     if top_keys:
         prj.append(f"Ship a small project using {', '.join(top_keys)}; include a README with metric(s) and a short demo.")
 

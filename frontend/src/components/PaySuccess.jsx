@@ -1,15 +1,28 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { getProfile } from "../services/apiClient";
 import { useMe } from "../context/MeContext.jsx";
 
 export default function PaySuccess() {
   const [msg, setMsg] = useState("Processing payment...");
-  const { setMe } = useMe();
+  const { me, setMe } = useMe();
 
   useEffect(() => {
     let active = true;
     const qs = new URLSearchParams(window.location.search);
     const sessionId = qs.get("session_id");
+
+    // Apply optimistic credits from localStorage immediately for a snappy UX
+    try {
+      const raw = localStorage.getItem("pendingPurchase");
+      if (raw) {
+        const { credits } = JSON.parse(raw);
+        if (credits && Number.isFinite(credits)) {
+          setMe?.(prev => ({ ...(prev || {}), credits: (prev?.credits || 0) + credits }));
+          try { window.dispatchEvent(new CustomEvent("profile_updated", { detail: { ...(me || {}), credits: (me?.credits || 0) + credits } })); } catch {}
+          setMsg("Payment successful — updating your profile…");
+        }
+      }
+    } catch {}
 
     async function tryRefresh(attempt = 1) {
       try {
@@ -19,6 +32,8 @@ export default function PaySuccess() {
           try { window.dispatchEvent(new CustomEvent("profile_updated", { detail: json })); } catch {}
           if (!active) return;
           setMsg("Payment successful — credits added. Redirecting...");
+          // clear pending optimistic purchase once we have server truth
+          try { localStorage.removeItem("pendingPurchase"); } catch {}
           setTimeout(() => (window.location.href = "/"), 1000);
           return;
         }

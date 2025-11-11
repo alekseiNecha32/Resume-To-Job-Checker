@@ -7,7 +7,7 @@ import { useMe } from "../context/MeContext.jsx";
 
 export default function NavBar() {
   // Use global profile from context so credits stay in sync everywhere
-  const { me, setMe } = useMe();
+  const { me, setMe, loading } = useMe();
   const [showAuth, setShowAuth] = useState(false);
   const [showProfile, setShowProfile] = useState(false); // <-- added
   const [showCreditsModal, setShowCreditsModal] = useState(false);
@@ -51,7 +51,10 @@ export default function NavBar() {
         </div>
 
         <div className="rtjc-actions">
-          {!me ? (
+          {loading ? (
+            // Avoid "logged out" flicker while context hydrates
+            <div style={{ width: 160, height: 36 }} />
+          ) : !me ? (
             <>
               <button className="btn btn-ghost" onClick={() => setShowAuth(true)}>
                 Log In

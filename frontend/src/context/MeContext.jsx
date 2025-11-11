@@ -5,8 +5,16 @@ import { supabase } from "../lib/supabaseClient";
 const MeContext = createContext(null);
 
 export function MeProvider({ children }) {
-  const [me, setMe] = useState(null);
-  const [loading, setLoading] = useState(true);
+  // Initialize from cache synchronously to avoid auth flicker after redirects
+  const [me, setMe] = useState(() => {
+    try {
+      const raw = localStorage.getItem("cachedProfile");
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [loading, setLoading] = useState(() => (localStorage.getItem("cachedProfile") ? false : true));
 
   useEffect(() => {
     let mounted = true;
@@ -15,18 +23,21 @@ export function MeProvider({ children }) {
         const u = await getMe();
         if (mounted && u) {
           setMe(u);
+          try { localStorage.setItem("cachedProfile", JSON.stringify(u)); } catch {}
           return;
         }
         // Fallback: if backend is down or unauthorized, still reflect Supabase auth
         const { data } = await supabase.auth.getUser();
         const user = data?.user;
         if (mounted && user) {
-          setMe({
+          const fallback = {
             user_id: user.id,
             email: user.email,
             full_name: user.user_metadata?.full_name || null,
             credits: 0, // unknown until backend responds
-          });
+          };
+          setMe(fallback);
+          try { localStorage.setItem("cachedProfile", JSON.stringify(fallback)); } catch {}
         }
       } catch {
         // On error, try to at least get the supabase user
@@ -34,7 +45,9 @@ export function MeProvider({ children }) {
           const { data } = await supabase.auth.getUser();
           const user = data?.user;
           if (mounted && user) {
-            setMe({ user_id: user.id, email: user.email, full_name: user.user_metadata?.full_name || null, credits: 0 });
+            const fallback = { user_id: user.id, email: user.email, full_name: user.user_metadata?.full_name || null, credits: 0 };
+            setMe(fallback);
+            try { localStorage.setItem("cachedProfile", JSON.stringify(fallback)); } catch {}
           } else if (mounted) {
             setMe(null);
           }
@@ -54,8 +67,12 @@ export function MeProvider({ children }) {
 
     // accept dispatched optimistic/server updates
     const onProfile = (e) => {
-      if (e?.detail) setMe(e.detail);
-      else load();
+      if (e?.detail) {
+        setMe(e.detail);
+        try { localStorage.setItem("cachedProfile", JSON.stringify(e.detail)); } catch {}
+      } else {
+        load();
+      }
     };
     window.addEventListener("profile_updated", onProfile);
 

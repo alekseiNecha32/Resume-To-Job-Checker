@@ -26,6 +26,16 @@ export default function CreditsModal({ onClose }) {
     try {
       const payload = { packId };
       if (packId === "custom") payload.credits = Math.max(1, Math.floor(credits || 0));
+      // Store intended credits locally for optimistic UI after redirect
+      try {
+        const intended = packId === "pro" ? 10 : (payload.credits || 0);
+        if (intended > 0) {
+          localStorage.setItem(
+            "pendingPurchase",
+            JSON.stringify({ credits: intended, ts: Date.now() })
+          );
+        }
+      } catch (_) {}
       const data = await createCheckoutSession(payload);
       if (data?.url) {
         window.location.href = data.url;
