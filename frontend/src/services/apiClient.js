@@ -1,16 +1,13 @@
 
 import { supabase } from "../lib/supabaseClient";
 
-// Prefer localhost to keep auth/session cookies on the same site as frontend
-export const API_BASE = import.meta.env.VITE_API_URL ?? "http://localhost:5000/api";
-
+export const API_BASE = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:5000/api";
 
 
 export async function authHeaders() {
   const { data: { session } } = await supabase.auth.getSession();
   console.log("DEBUG session:", session);
   const headers = { "Content-Type": "application/json" };
-  // If we have an access token, send it as Authorization
   if (session?.access_token) {
     console.log("DEBUG sending Authorization Bearer token");
     headers["Authorization"] = `Bearer ${session.access_token}`;
@@ -53,7 +50,6 @@ export async function scoreResume(resumeText, jobText, jobTitle = "") {
   };
 }
 
-// ...existing code...
 export async function smartAnalyze({ resumeText, jobText, jobTitle }) {
   const headers = await authHeaders();
   const res = await fetch(`${API_BASE}/smart/analyze`, {
@@ -72,7 +68,6 @@ export async function smartAnalyze({ resumeText, jobText, jobTitle }) {
 
   const payload = (analysis && (analysis.data || analysis.result || analysis.analysis)) || analysis || null;
 
-  // best-effort refresh of profile so caller can update UI immediately
   let profile = null;
   try {
     profile = await getMe();
@@ -82,10 +77,14 @@ export async function smartAnalyze({ resumeText, jobText, jobTitle }) {
 
   return { analysis: payload, profile };
 }
-// ...existing code...
 
 
 export async function getMe() {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.access_token && !import.meta.env.VITE_DEV_USER_ID) {
+    return null;
+  }
+
   const headers = await authHeaders();
   const r = await fetch(`${API_BASE}/me`, { method: "GET", headers });
   if (!r.ok) return null;
@@ -115,7 +114,7 @@ export async function createCheckoutSession({ packId, credits } = {}) {
   let json = {};
   try { json = text ? JSON.parse(text) : {}; } catch (e) { throw new Error("Invalid JSON from checkout"); }
   if (!res.ok) throw new Error(json?.message || json?.error || `Checkout failed (${res.status})`);
-  return json; // { url }
+  return json;
 }
 export async function getProfile() {
   return getMe();

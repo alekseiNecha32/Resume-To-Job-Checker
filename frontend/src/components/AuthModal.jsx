@@ -3,7 +3,7 @@ import { supabase } from "../lib/supabaseClient";
 import { API_BASE } from "../services/apiClient";
 
 export default function AuthModal({ onClose, onSuccess }) {
-  const [mode, setMode] = useState("signup"); // "login" | "signup"
+  const [mode, setMode] = useState("signup");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
@@ -11,14 +11,14 @@ export default function AuthModal({ onClose, onSuccess }) {
   const [msg, setMsg] = useState(null);
 
   async function callCreateProfile(token) {
+    if (!fullName.trim()) return;
     try {
       await fetch(`${API_BASE}/auth/create_profile`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ full_name: fullName }),
+        body: JSON.stringify({ full_name: fullName.trim() }),
       });
     } catch (e) {
-      // ignore errors — endpoint is idempotent
       console.warn("create_profile failed", e);
     }
   }
@@ -34,7 +34,6 @@ export default function AuthModal({ onClose, onSuccess }) {
       });
       if (error) throw error;
 
-      // try sign-in to get session immediately
       try {
         await supabase.auth.signInWithPassword({ email, password });
       } catch (e) {
@@ -59,10 +58,6 @@ export default function AuthModal({ onClose, onSuccess }) {
     try {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
-
-      const token = (await supabase.auth.getSession()).data?.session?.access_token;
-      if (token) await callCreateProfile(token);
-
       setLoading(false);
       if (onSuccess) onSuccess();
     } catch (e) {

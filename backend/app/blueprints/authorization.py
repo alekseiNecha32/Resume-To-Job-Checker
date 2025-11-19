@@ -6,79 +6,89 @@ from dotenv import load_dotenv
 auth_bp = Blueprint("auth_api", __name__, url_prefix="/api")
 
 def _profiles_has_full_name(supabase_client):
-    """Best-effort detection of full_name column. Cache result on function attribute."""
     if hasattr(_profiles_has_full_name, "_cache"):
         return getattr(_profiles_has_full_name, "_cache")
     try:
-        # Try selecting one row including full_name; if column missing PostgREST returns error
-        probe = supabase_client.table("profiles").select("full_name").limit(1).execute()
-        # If no exception / error attribute, assume exists
-        _profiles_has_full_name._cache = True  # type: ignore
+        supabase_client.table("profiles").select("full_name").limit(1).execute()
+        _profiles_has_full_name._cache = True
     except Exception:
-        _profiles_has_full_name._cache = False  # type: ignore
+        _profiles_has_full_name._cache = False
     return getattr(_profiles_has_full_name, "_cache")
+
+def _get_supabase():
+    load_dotenv()
+    url = os.getenv("SUPABASE_URL")
+    key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+    if not url or not key:
+        return None
+    return create_client(url, key)
+
+def _resolve_user(supabase, token):
+    user = None
+    try:
+        if hasattr(supabase.auth, "api") and hasattr(supabase.auth.api, "get_user"):
+            resp = supabase.auth.api.get_user(token)
+            user = (resp.get("data") or {}).get("user") if isinstance(resp, dict) else getattr(resp, "user", None)
+        elif hasattr(supabase.auth, "get_user"):
+            resp2 = supabase.auth.get_user(token)
+            user = (resp2.get("data") or {}).get("user") if isinstance(resp2, dict) else getattr(resp2, "user", None)
+    except Exception:
+        user = None
+    if not user:
+        return None, None, None
+    if isinstance(user, dict):
+        return user.get("id"), user.get("email"), user.get("user_metadata") or {}
+    return getattr(user, "id", None), getattr(user, "email", None), getattr(user, "user_metadata", {}) or {}
 
 
 @auth_bp.post("/auth/create_profile")
 def create_profile():
-    """Upsert a profile for the authenticated user with starter credits (10)."""
+    """Called once after signup to create profile and grant starter credits."""
     try:
-        load_dotenv()
-        SUPABASE_URL = os.getenv("SUPABASE_URL")
-        SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-        if not SUPABASE_URL or not SUPABASE_KEY:
+        supabase = _get_supabase()
+        if not supabase:
             return jsonify({"error": "server_misconfigured"}), 500
 
-        supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-
-        auth = request.headers.get("Authorization", "") or ""
+        auth = request.headers.get("Authorization", "")
         if not auth.lower().startswith("bearer "):
             return jsonify({"error": "unauthorized"}), 401
-
         token = auth.split(" ", 1)[1].strip()
 
-        user = None
-        try:
-            if hasattr(supabase.auth, "api") and hasattr(supabase.auth.api, "get_user"):
-                uresp = supabase.auth.api.get_user(token)
-                user = (uresp.get("data") or {}).get("user") if isinstance(uresp, dict) else getattr(uresp, "user", None)
-            elif hasattr(supabase.auth, "get_user"):
-                uresp2 = supabase.auth.get_user(token)
-                user = (uresp2.get("data") or {}).get("user") if isinstance(uresp2, dict) else getattr(uresp2, "user", None)
-        except Exception as e:
-            print("DEBUG create_profile get_user exception:", repr(e))
-            return jsonify({"error": "unauthorized"}), 401
-
-        if not user:
-            return jsonify({"error": "unauthorized"}), 401
-
-        uid = user.get("id") if isinstance(user, dict) else getattr(user, "id", None)
-        email = user.get("email") if isinstance(user, dict) else getattr(user, "email", None)
-
+        uid, email, user_meta = _resolve_user(supabase, token)
         if not uid:
             return jsonify({"error": "unauthorized"}), 401
 
         body = request.get_json(silent=True) or {}
-        full_name = body.get("full_name") or (user.get("user_metadata", {}) or {}).get("full_name") if isinstance(user, dict) else None
+        full_name_in = (body.get("full_name") or user_meta.get("full_name") or "").strip()
 
-        # upsert profile with starter credits
-        # use upsert so it creates or updates existing row
-        payload = {"user_id": uid, "email": email, "credits": 10}
-        if full_name and _profiles_has_full_name(supabase):
-            payload["full_name"] = full_name
+        existing = supabase.table("profiles").select("user_id, credits" + (", full_name" if _profiles_has_full_name(supabase) else "")).eq("user_id", uid).limit(1).execute()
+        existing_raw = existing.get("data") if isinstance(existing, dict) else getattr(existing, "data", None)
+        if isinstance(existing_raw, list) and existing_raw:
+            return jsonify({"error": "profile_exists"}), 409
+
+        new_row = {
+            "user_id": uid,
+            "email": email,
+            "credits": 10
+        }
+        if full_name_in and _profiles_has_full_name(supabase):
+            new_row["full_name"] = full_name_in
+
         try:
-            supabase.table("profiles").upsert(payload).execute()
+            supabase.table("profiles").upsert(new_row, on_conflict="user_id").execute()
         except TypeError:
-            # older client variant
-            supabase.table("profiles").upsert(payload, on_conflict="user_id").execute()
+            supabase.table("profiles").upsert(new_row).execute()
 
-        return jsonify({"user_id": uid, "email": email, "credits": 10}), 200
-
+        return jsonify({
+            "user_id": uid,
+            "email": email,
+            "credits": 10,
+            "full_name": new_row.get("full_name") if _profiles_has_full_name(supabase) else None
+        }), 200
     except Exception:
         import traceback
         traceback.print_exc()
         return jsonify({"error": "internal_server_error"}), 500
-
 
 
 
@@ -128,7 +138,6 @@ def me():
         print("DEBUG: token prefix:", token[:40])
 
         user = None
-        # Try auth.api.get_user then auth.get_user (handle different SDK shapes)
         try:
             if hasattr(supabase.auth, "api") and hasattr(supabase.auth.api, "get_user"):
                 print("DEBUG: calling supabase.auth.api.get_user")
@@ -148,7 +157,6 @@ def me():
             print("DEBUG: user not resolved from token -- token may be invalid/expired or wrong project")
             return jsonify({"error": "unauthorized"}), 401
 
-        # extract id/email safely for both dict and object shapes
         if isinstance(user, dict):
             uid = user.get("id")
             email = user.get("email")
@@ -186,6 +194,8 @@ def me():
         print("UNCAUGHT /me exception:")
         traceback.print_exc()
         return jsonify({"error": "internal_server_error"}), 500
+    
+
 @auth_bp.post("/profile")
 def update_profile():
     """Update editable profile fields for the authenticated user.
@@ -248,7 +258,6 @@ def update_profile():
                 except Exception:
                     pass
 
-        # Read back profile
         select_cols = "credits, full_name" if _profiles_has_full_name(supabase) else "credits"
         try:
             prof = supabase.table("profiles").select(select_cols).eq("user_id", uid).execute()

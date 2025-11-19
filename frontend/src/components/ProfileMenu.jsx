@@ -12,7 +12,6 @@ export default function ProfileMenu({ me, onClose, onLogout, onBuyCredits }) {
   const [fullNameDraft, setFullNameDraft] = useState(displayMe?.full_name || "");
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState(null);
-  // No local profile state here; rely solely on MeContext so values stay consistent
 
   useEffect(() => {
     function onDoc(e) {
@@ -28,7 +27,6 @@ export default function ProfileMenu({ me, onClose, onLogout, onBuyCredits }) {
       try {
         onBuyCredits();
       } finally {
-        // close the dropdown after triggering modal
         onClose?.();
       }
       return;
@@ -64,8 +62,7 @@ export default function ProfileMenu({ me, onClose, onLogout, onBuyCredits }) {
       setMe?.(prev => ({ ...(prev || {}), ...updated }));
       setMsg("Saved");
       setEditing(false);
-      // broadcast so any other listeners update
-      try { window.dispatchEvent(new CustomEvent("profile_updated", { detail: updated })); } catch {}
+      try { window.dispatchEvent(new CustomEvent("profile_updated", { detail: updated })); } catch { }
     } catch (err) {
       setMsg(err.message || "Save failed");
     } finally {
@@ -79,19 +76,29 @@ export default function ProfileMenu({ me, onClose, onLogout, onBuyCredits }) {
   }
 
   async function handleLogoff() {
-    if (onLogout) {
-      await onLogout();
-    } else {
-      try {
+    try {
+      // Sign out from Supabase (this will trigger SIGNED_OUT event)
+      if (onLogout) {
+        await onLogout();
+      } else {
         await supabase.auth.signOut();
-      } catch {}
+      }
+
+      // Clear context and cache immediately (MeContext will also handle this)
+      setMe?.(null);
+      try {
+        localStorage.removeItem("cachedProfile");
+      } catch { }
+
+      onClose?.();
+
+    } catch (err) {
+      console.error('Logout error:', err);
+      alert('Logout failed. Please try again.');
     }
-    onClose?.();
-    window.location.reload();
   }
 
-
- return (
+  return (
     <div ref={ref} className="profile-dropdown" role="menu" aria-label="Profile menu">
       <div className="profile-dropdown-header">
         {!editing ? (
@@ -113,10 +120,10 @@ export default function ProfileMenu({ me, onClose, onLogout, onBuyCredits }) {
               maxLength={80}
             />
             <div className="flex gap-2">
-              <button disabled={saving} type="submit" className="flex-1 profile-item" style={{marginTop:0, background:"var(--primary)", color:"white"}}>
+              <button disabled={saving} type="submit" className="flex-1 profile-item" style={{ marginTop: 0, background: "var(--primary)", color: "white" }}>
                 {saving ? "Saving…" : "Save"}
               </button>
-              <button type="button" onClick={handleCancel} className="flex-1 profile-item" style={{marginTop:0}}>
+              <button type="button" onClick={handleCancel} className="flex-1 profile-item" style={{ marginTop: 0 }}>
                 Cancel
               </button>
             </div>

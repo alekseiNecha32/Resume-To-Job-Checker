@@ -24,10 +24,9 @@ export function MeProvider({ children }) {
         const u = await getMe();
         if (mounted && u) {
           setMe(u);
-          try { localStorage.setItem("cachedProfile", JSON.stringify(u)); } catch {}
+          try { localStorage.setItem("cachedProfile", JSON.stringify(u)); } catch { }
           return;
         }
-        // Fallback: reflect Supabase auth user without clearing existing profile
         const { data } = await supabase.auth.getUser();
         const user = data?.user;
         if (mounted && user) {
@@ -37,9 +36,15 @@ export function MeProvider({ children }) {
             full_name: user.user_metadata?.full_name || prev?.full_name || null,
             credits: prev?.credits ?? 0,
           }));
+        } else {
+          // No user found - clear state
+          if (mounted) {
+            setMe(null);
+            try { localStorage.removeItem("cachedProfile"); } catch { }
+          }
         }
       } catch {
-        // keep previous me; no nulling to avoid flicker
+
       } finally {
         if (mounted) setLoading(false);
       }
@@ -47,17 +52,27 @@ export function MeProvider({ children }) {
 
     load();
 
-    // refresh on auth changes but keep existing UI state
-    const { data: sub } = supabase.auth.onAuthStateChange(() => {
-      // Refresh in background to avoid visible flicker
-      load();
+    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
+      console.log('Auth event:', event); // Debug log
+
+      if (event === 'SIGNED_OUT') {
+        // User logged out - clear everything
+        if (mounted) {
+          setMe(null);
+          try {
+            localStorage.removeItem("cachedProfile");
+          } catch { }
+        }
+      } else {
+        // Refresh in background to avoid visible flicker
+        load();
+      }
     });
 
-    // accept dispatched optimistic/server updates
     const onProfile = (e) => {
       if (e?.detail) {
         setMe(e.detail);
-        try { localStorage.setItem("cachedProfile", JSON.stringify(e.detail)); } catch {}
+        try { localStorage.setItem("cachedProfile", JSON.stringify(e.detail)); } catch { }
       } else {
         load();
       }
@@ -75,7 +90,7 @@ export function MeProvider({ children }) {
   useEffect(() => {
     try {
       if (me) localStorage.setItem("cachedProfile", JSON.stringify(me));
-    } catch {}
+    } catch { }
   }, [me]);
 
   return (

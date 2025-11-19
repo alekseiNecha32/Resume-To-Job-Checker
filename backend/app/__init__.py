@@ -1,11 +1,12 @@
 import os
-from flask import Flask
+from flask import Flask, app
 from flask_cors import CORS
 from dotenv import load_dotenv
 
+
+from app.blueprints.authorization import auth_bp
 from app.blueprints.api import api_bp
 from app.blueprints.smart import smart_bp
-from app.blueprints.authorization import auth_bp as auth_api_bp
 from .blueprints.stripe import stripe_bp
 
 def create_app():
@@ -24,22 +25,16 @@ def create_app():
                 "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"],
             }
         },
-    
-
     )
 
     
-    app.register_blueprint(api_bp)  # 
+    app.register_blueprint(api_bp)  
     app.register_blueprint(smart_bp)
-    app.register_blueprint(auth_api_bp)
-    app.register_blueprint(stripe_bp)   # ensure this line exists
+    app.register_blueprint(stripe_bp)   
+    app.register_blueprint(auth_bp)
 
     @app.get("/health")
     def health():
         return {"status": "ok"}
 
     return app
-
-
-
- # CORS(app, resources={r"/api/*": {"origins": ["http://localhost:5173"]}})

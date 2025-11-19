@@ -6,25 +6,30 @@ import { supabase } from "../lib/supabaseClient";
 import { useMe } from "../context/MeContext.jsx";
 
 export default function NavBar() {
-  // Use global profile from context so credits stay in sync everywhere
   const { me, setMe, loading } = useMe();
   const [showAuth, setShowAuth] = useState(false);
-  const [showProfile, setShowProfile] = useState(false); // <-- added
+  const [showProfile, setShowProfile] = useState(false);
   const [showCreditsModal, setShowCreditsModal] = useState(false);
 
   async function onAuthSuccess() {
-    // Close modal; MeProvider will refresh on auth state change
     setShowAuth(false);
   }
 
   async function handleLogout() {
     try {
       await supabase.auth.signOut();
+      setMe(null);
+      
+      // Clear cache
+      try {
+        localStorage.removeItem("cachedProfile");
+      } catch {}
+      
+      // Close profile menu
+      setShowProfile(false);
+      
     } catch (e) {
       console.warn("signOut error", e);
-    } finally {
-      setMe(null);
-      setShowProfile(false);
     }
   }
 
