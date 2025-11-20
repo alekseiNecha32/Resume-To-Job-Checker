@@ -1,145 +1,133 @@
-
-import React, { useEffect, useRef, useState } from "react";
-import { useMe } from "../context/MeContext.jsx";
-import { createCheckoutSession, updateProfile } from "../services/apiClient";
+import React, { useRef, useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
+import { useMe } from "../context/MeContext.jsx";
 
 export default function ProfileMenu({ me, onClose, onLogout, onBuyCredits }) {
   const ref = useRef(null);
   const { me: ctxMe, setMe } = useMe();
   const displayMe = ctxMe ?? me ?? {};
   const [editing, setEditing] = useState(false);
-  const [fullNameDraft, setFullNameDraft] = useState(displayMe?.full_name || "");
+  const [avatarFile, setAvatarFile] = useState(null);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState(null);
 
   useEffect(() => {
-    function onDoc(e) {
+    function handle(e) {
       if (ref.current && !ref.current.contains(e.target)) onClose?.();
     }
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
+    document.addEventListener("mousedown", handle);
+    return () => document.removeEventListener("mousedown", handle);
   }, [onClose]);
-
-  async function handleBuy() {
-    // prefer parent-provided handler (opens CreditsModal)
-    if (onBuyCredits) {
-      try {
-        onBuyCredits();
-      } finally {
-        onClose?.();
-      }
-      return;
-    }
-
-    try {
-      const sess = await createCheckoutSession();
-      if (sess?.url) {
-        window.location.href = sess.url;
-      } else if (sess?.id) {
-        window.location.href = `/pay/checkout/${sess.id}`;
-      }
-    } catch (e) {
-      console.error("checkout error", e);
-      alert("Could not start checkout.");
-    } finally {
-      onClose?.();
-    }
-  }
-
-  function handleEdit() {
-    setFullNameDraft(displayMe?.full_name || "");
-    setEditing(true);
-  }
 
   async function handleSave(e) {
     e?.preventDefault();
-    if (saving) return;
-    setSaving(true);
-    setMsg(null);
+    if (!avatarFile || saving) return;
+    setSaving(true); setMsg(null);
     try {
-      const updated = await updateProfile({ full_name: fullNameDraft });
-      setMe?.(prev => ({ ...(prev || {}), ...updated }));
-      setMsg("Saved");
+      const token = (await supabase.auth.getSession()).data?.session?.access_token;
+      if (!token) throw new Error("Not authenticated");
+      const form = new FormData();
+      form.append("avatar", avatarFile);
+      const resp = await fetch("/api/profile", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: form
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || "Upload failed");
+      setMe?.(prev => ({ ...(prev || {}), ...data }));
+      setMsg("Updated");
       setEditing(false);
-      try { window.dispatchEvent(new CustomEvent("profile_updated", { detail: updated })); } catch { }
+      setAvatarFile(null);
     } catch (err) {
-      setMsg(err.message || "Save failed");
+      setMsg(err.message || "Error");
     } finally {
       setSaving(false);
     }
   }
 
+  function handleEdit() {
+    setEditing(true);
+    setMsg(null);
+  }
+
   function handleCancel() {
     setEditing(false);
+    setAvatarFile(null);
     setMsg(null);
   }
 
   async function handleLogoff() {
-    try {
-      // Sign out from Supabase (this will trigger SIGNED_OUT event)
-      if (onLogout) {
-        await onLogout();
-      } else {
-        await supabase.auth.signOut();
-      }
+    await supabase.auth.signOut();
+    onLogout?.();
+  }
 
-      // Clear context and cache immediately (MeContext will also handle this)
-      setMe?.(null);
-      try {
-        localStorage.removeItem("cachedProfile");
-      } catch { }
-
-      onClose?.();
-
-    } catch (err) {
-      console.error('Logout error:', err);
-      alert('Logout failed. Please try again.');
-    }
+  async function handleBuy() {
+    onBuyCredits?.();
   }
 
   return (
-    <div ref={ref} className="profile-dropdown" role="menu" aria-label="Profile menu">
-      <div className="profile-dropdown-header">
-        {!editing ? (
-          <>
-            <div className="profile-dropdown-name">
-              {displayMe?.full_name || (displayMe?.email ? displayMe.email.split("@")[0] : "")}
-            </div>
-            <div className="profile-dropdown-email">{displayMe?.email}</div>
-          </>
-        ) : (
-          <form onSubmit={handleSave} className="space-y-2">
-            <input
-              type="text"
-              autoFocus
-              className="w-full rounded-md border px-2 py-1 text-sm"
-              placeholder="Full name"
-              value={fullNameDraft}
-              onChange={(e) => setFullNameDraft(e.target.value)}
-              maxLength={80}
+    <div className="profile-dropdown" ref={ref}>
+      <div className="profile-dropdown-inner">
+        <div className="profile-header-block">
+          <div className="profile-dropdown-email">{displayMe?.email}</div>
+          {displayMe?.avatar_url && !editing && (
+            <img
+              src={displayMe.avatar_url}
+              alt="avatar"
+              style={{ width: 64, height: 64, borderRadius: "50%", objectFit: "cover", marginTop: 8 }}
             />
+          )}
+        </div>
+
+        {editing ? (
+          <form onSubmit={handleSave} className="space-y-2" style={{ marginTop: 12 }}>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(e) => setAvatarFile(e.target.files?.[0] || null)}
+              className="w-full rounded-md border px-2 py-1 text-sm"
+            />
+            {(avatarFile || displayMe?.avatar_url) && (
+              <img
+                src={avatarFile ? URL.createObjectURL(avatarFile) : displayMe.avatar_url}
+                alt="preview"
+                style={{ width: 64, height: 64, borderRadius: "50%", objectFit: "cover" }}
+              />
+            )}
+            {msg && <div style={{ fontSize: 12 }}>{msg}</div>}
             <div className="flex gap-2">
-              <button disabled={saving} type="submit" className="flex-1 profile-item" style={{ marginTop: 0, background: "var(--primary)", color: "white" }}>
-                {saving ? "Saving…" : "Save"}
+              <button
+                disabled={!avatarFile || saving}
+                type="submit"
+                className="profile-item"
+                style={{ background: "var(--primary)", color: "#fff" }}
+              >
+                {saving ? "Uploading…" : "Save"}
               </button>
-              <button type="button" onClick={handleCancel} className="flex-1 profile-item" style={{ marginTop: 0 }}>
+              <button type="button" className="profile-item" onClick={handleCancel}>
                 Cancel
               </button>
             </div>
           </form>
+        ) : (
+          <>
+            <button type="button" className="profile-item" onClick={handleEdit}>
+              ✎ Change Avatar
+            </button>
+          </>
         )}
-      </div>
 
-      <div className="profile-credits-card">
-        <div className="credits-title">Smart Analysis Credits</div>
-        <div className="credits-value">{(displayMe?.credits ?? 0) + " credits"}</div>
-      </div>
+           <div className="credits-gradient">
+          <div className="credits-label">Smart Analysis Credits</div>
+          <div className="credits-value">{displayMe?.credits ?? 0} credits</div>
+        </div>
 
-      {!editing && <button type="button" className="profile-item" onClick={handleEdit}>✎ Edit Profile</button>}
-      <button type="button" className="profile-item" onClick={handleBuy} aria-label="Buy credits">💳 Buy Credits</button>
-      <button type="button" className="profile-item danger" onClick={handleLogoff}>⤫ Log off</button>
-      {msg && !editing && <div className="mt-2 text-xs text-center opacity-70">{msg}</div>}
+        <button type="button" className="profile-item" onClick={handleBuy}>Buy Credits</button>
+        <button type="button" className="profile-item" onClick={handleLogoff} style={{ color: "#c01818" }}>
+          Log off
+        </button>
+      </div>
     </div>
   );
 }

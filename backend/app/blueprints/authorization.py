@@ -1,19 +1,9 @@
+import os, time, mimetypes, traceback
 from flask import Blueprint, request, jsonify
 from supabase import create_client
-import os
 from dotenv import load_dotenv
 
 auth_bp = Blueprint("auth_api", __name__, url_prefix="/api")
-
-def _profiles_has_full_name(supabase_client):
-    if hasattr(_profiles_has_full_name, "_cache"):
-        return getattr(_profiles_has_full_name, "_cache")
-    try:
-        supabase_client.table("profiles").select("full_name").limit(1).execute()
-        _profiles_has_full_name._cache = True
-    except Exception:
-        _profiles_has_full_name._cache = False
-    return getattr(_profiles_has_full_name, "_cache")
 
 def _get_supabase():
     load_dotenv()
@@ -40,10 +30,9 @@ def _resolve_user(supabase, token):
         return user.get("id"), user.get("email"), user.get("user_metadata") or {}
     return getattr(user, "id", None), getattr(user, "email", None), getattr(user, "user_metadata", {}) or {}
 
-
 @auth_bp.post("/auth/create_profile")
 def create_profile():
-    """Called once after signup to create profile and grant starter credits."""
+    """Create profile once after signup with starter credits (no full_name)."""
     try:
         supabase = _get_supabase()
         if not supabase:
@@ -54,231 +43,127 @@ def create_profile():
             return jsonify({"error": "unauthorized"}), 401
         token = auth.split(" ", 1)[1].strip()
 
-        uid, email, user_meta = _resolve_user(supabase, token)
+        uid, email, _meta = _resolve_user(supabase, token)
         if not uid:
             return jsonify({"error": "unauthorized"}), 401
 
-        body = request.get_json(silent=True) or {}
-        full_name_in = (body.get("full_name") or user_meta.get("full_name") or "").strip()
-
-        existing = supabase.table("profiles").select("user_id, credits" + (", full_name" if _profiles_has_full_name(supabase) else "")).eq("user_id", uid).limit(1).execute()
-        existing_raw = existing.get("data") if isinstance(existing, dict) else getattr(existing, "data", None)
-        if isinstance(existing_raw, list) and existing_raw:
+        existing = supabase.table("profiles").select("user_id").eq("user_id", uid).limit(1).execute()
+        raw = existing.get("data") if isinstance(existing, dict) else getattr(existing, "data", None)
+        if isinstance(raw, list) and raw:
             return jsonify({"error": "profile_exists"}), 409
 
-        new_row = {
-            "user_id": uid,
-            "email": email,
-            "credits": 10
-        }
-        if full_name_in and _profiles_has_full_name(supabase):
-            new_row["full_name"] = full_name_in
-
+        row = {"user_id": uid, "email": email, "credits": 10, "avatar_url": None}
         try:
-            supabase.table("profiles").upsert(new_row, on_conflict="user_id").execute()
+            supabase.table("profiles").upsert(row, on_conflict="user_id").execute()
         except TypeError:
-            supabase.table("profiles").upsert(new_row).execute()
+            supabase.table("profiles").upsert(row).execute()
+
+        return jsonify({"user_id": uid, "email": email, "credits": 10, "avatar_url": None}), 200
+    except Exception:
+        traceback.print_exc()
+        return jsonify({"error": "internal_server_error"}), 500
+
+@auth_bp.get("/me")
+def me():
+    """Return current user id, email, credits, avatar_url."""
+    try:
+        supabase = _get_supabase()
+        if not supabase:
+            return jsonify({"error": "server_misconfigured"}), 500
+
+        auth = request.headers.get("Authorization", "")
+        if not auth.lower().startswith("bearer "):
+            return jsonify({"error": "unauthorized"}), 401
+        token = auth.split(" ", 1)[1].strip()
+
+        uid, email, _meta = _resolve_user(supabase, token)
+        if not uid:
+            return jsonify({"error": "unauthorized"}), 401
+
+        res = supabase.table("profiles").select("credits, avatar_url").eq("user_id", uid).limit(1).execute()
+        raw = res.get("data") if isinstance(res, dict) else getattr(res, "data", None)
+        row = raw[0] if isinstance(raw, list) and raw else {}
 
         return jsonify({
             "user_id": uid,
             "email": email,
-            "credits": 10,
-            "full_name": new_row.get("full_name") if _profiles_has_full_name(supabase) else None
+            "credits": row.get("credits", 0),
+            "avatar_url": row.get("avatar_url")
         }), 200
     except Exception:
-        import traceback
         traceback.print_exc()
         return jsonify({"error": "internal_server_error"}), 500
 
-
-
-
-@auth_bp.get("/me")
-def me():
-    """Return current user id / credits. Accepts X-User-Id (dev) or Authorization: Bearer <token>."""
-    try:
-        headers = dict(request.headers)
-        print("DEBUG: incoming headers:", headers)
-
-        load_dotenv()
-        SUPABASE_URL = os.getenv("SUPABASE_URL")
-        SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-        print("DEBUG: SUPABASE_URL:", bool(SUPABASE_URL), "SUPABASE_KEY:", bool(SUPABASE_KEY))
-
-        if not SUPABASE_URL or not SUPABASE_KEY:
-            print("DEBUG: missing SUPABASE env")
-            return jsonify({"error": "server_misconfigured"}), 500
-
-        supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-
-        # Dev override header
-        dev_uid = request.headers.get("X-User-Id")
-        if dev_uid:
-            print("DEBUG: using X-User-Id override:", dev_uid)
-            profile_res = supabase.table("profiles").select("credits").eq("user_id", dev_uid).execute()
-            # normalize result shapes
-            pdata_raw = profile_res.get("data") if isinstance(profile_res, dict) else getattr(profile_res, "data", None)
-            if isinstance(pdata_raw, list):
-                pdata = pdata_raw[0] if pdata_raw else {}
-            elif isinstance(pdata_raw, dict):
-                pdata = pdata_raw
-            else:
-                pdata = {}
-            return jsonify({"user_id": dev_uid, "credits": pdata.get("credits", 0), "email": None}), 200
-
-        auth = request.headers.get("Authorization", "") or ""
-        if os.getenv("DEBUG_AUTH_ECHO", "0") == "1":
-            return jsonify({"headers": headers}), 200
-
-        if not auth.lower().startswith("bearer "):
-            print("DEBUG: no Bearer token present")
-            return jsonify({"error": "unauthorized"}), 401
-
-        token = auth.split(" ", 1)[1].strip()
-        print("DEBUG: token prefix:", token[:40])
-
-        user = None
-        try:
-            if hasattr(supabase.auth, "api") and hasattr(supabase.auth.api, "get_user"):
-                print("DEBUG: calling supabase.auth.api.get_user")
-                uresp = supabase.auth.api.get_user(token)
-                print("DEBUG: auth.api.get_user raw ->", repr(uresp))
-                user = (uresp.get("data") or {}).get("user") if isinstance(uresp, dict) else getattr(uresp, "user", None)
-            elif hasattr(supabase.auth, "get_user"):
-                print("DEBUG: calling supabase.auth.get_user")
-                uresp2 = supabase.auth.get_user(token)
-                print("DEBUG: auth.get_user raw ->", repr(uresp2))
-                user = (uresp2.get("data") or {}).get("user") if isinstance(uresp2, dict) else getattr(uresp2, "user", None)
-        except Exception as e:
-            print("DEBUG: get_user exception:", repr(e))
-            user = None
-
-        if not user:
-            print("DEBUG: user not resolved from token -- token may be invalid/expired or wrong project")
-            return jsonify({"error": "unauthorized"}), 401
-
-        if isinstance(user, dict):
-            uid = user.get("id")
-            email = user.get("email")
-        else:
-            uid = getattr(user, "id", None)
-            email = getattr(user, "email", None)
-
-        if not uid:
-            print("DEBUG: resolved user has no id:", user)
-            return jsonify({"error": "unauthorized"}), 401
-
-        print("DEBUG: resolved user id:", uid)
-
-        # fetch profile; include full_name only if column present
-        select_cols = "credits, full_name" if _profiles_has_full_name(supabase) else "credits"
-        try:
-            profile_res = supabase.table("profiles").select(select_cols).eq("user_id", uid).execute()
-        except Exception:
-            # fallback to credits only
-            profile_res = supabase.table("profiles").select("credits").eq("user_id", uid).execute()
-        pdata_raw = profile_res.get("data") if isinstance(profile_res, dict) else getattr(profile_res, "data", None)
-        if isinstance(pdata_raw, list):
-            pdata = pdata_raw[0] if pdata_raw else {}
-        elif isinstance(pdata_raw, dict):
-            pdata = pdata_raw
-        else:
-            pdata = {}
-
-        credits = pdata.get("credits", 0)
-        full_name = pdata.get("full_name") if _profiles_has_full_name(supabase) else None
-        return jsonify({"user_id": uid, "credits": credits, "email": email, "full_name": full_name}), 200
-
-    except Exception as exc:
-        import traceback
-        print("UNCAUGHT /me exception:")
-        traceback.print_exc()
-        return jsonify({"error": "internal_server_error"}), 500
-    
-
+# ...existing code...
 @auth_bp.post("/profile")
 def update_profile():
-    """Update editable profile fields for the authenticated user.
-    Currently supports: full_name.
-    """
+    """Upload/replace avatar. multipart/form-data field 'avatar'."""
     try:
-        load_dotenv()
-        SUPABASE_URL = os.getenv("SUPABASE_URL")
-        SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-        if not SUPABASE_URL or not SUPABASE_KEY:
+        supabase = _get_supabase()
+        if not supabase:
             return jsonify({"error": "server_misconfigured"}), 500
 
-        supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-
-        auth = request.headers.get("Authorization", "") or ""
+        auth = request.headers.get("Authorization", "")
         if not auth.lower().startswith("bearer "):
             return jsonify({"error": "unauthorized"}), 401
         token = auth.split(" ", 1)[1].strip()
 
-        # Resolve user from token
-        user = None
-        try:
-            if hasattr(supabase.auth, "api") and hasattr(supabase.auth.api, "get_user"):
-                uresp = supabase.auth.api.get_user(token)
-                user = (uresp.get("data") or {}).get("user") if isinstance(uresp, dict) else getattr(uresp, "user", None)
-            elif hasattr(supabase.auth, "get_user"):
-                uresp2 = supabase.auth.get_user(token)
-                user = (uresp2.get("data") or {}).get("user") if isinstance(uresp2, dict) else getattr(uresp2, "user", None)
-        except Exception:
-            user = None
-
-        if not user:
-            return jsonify({"error": "unauthorized"}), 401
-
-        uid = user.get("id") if isinstance(user, dict) else getattr(user, "id", None)
-        email = user.get("email") if isinstance(user, dict) else getattr(user, "email", None)
+        uid, email, _meta = _resolve_user(supabase, token)
         if not uid:
             return jsonify({"error": "unauthorized"}), 401
 
-        body = request.get_json(silent=True) or {}
-        full_name = body.get("full_name")
+        if not (request.content_type and "multipart/form-data" in request.content_type.lower()):
+            return jsonify({"error": "expected_multipart"}), 400
 
-        update = {"user_id": uid}
-        want_full = isinstance(full_name, str) and full_name.strip()
-        has_full = _profiles_has_full_name(supabase)
-        if want_full and has_full:
-            update["full_name"] = full_name.strip()
+        avatar_file = request.files.get("avatar")
+        if not avatar_file:
+            return jsonify({"error": "no_file"}), 400
 
-        # Upsert so row exists even if missing
+        bucket = os.getenv("SUPABASE_AVATAR_BUCKET", "avatars")
+        try:
+            supabase.storage.create_bucket(bucket, {"public": False})
+        except Exception:
+            pass
+
+        ext = os.path.splitext(avatar_file.filename or "")[1].lower() or ".bin"
+        mime = mimetypes.guess_type(avatar_file.filename or "")[0] or "application/octet-stream"
+        path = f"{uid}/{int(time.time())}{ext}"
+        data = avatar_file.read()
+        supabase.storage.from_(bucket).upload(path, data, {"content-type": mime})
+
+        # Signed URL (30 days)
+        signed = supabase.storage.from_(bucket).create_signed_url(path, 60 * 60 * 24 * 30)
+        if isinstance(signed, dict):
+            avatar_url = (
+                signed.get("signedURL")
+                or signed.get("signedUrl")
+                or signed.get("signed_url")
+                or (isinstance(signed.get("data"), dict) and (
+                    signed["data"].get("signedURL") or signed["data"].get("signedUrl") or signed["data"].get("signed_url")
+                ))
+            )
+        else:
+            avatar_url = signed
+        if not isinstance(avatar_url, str):
+            avatar_url = ""
+
+        update = {"user_id": uid, "avatar_url": avatar_url}
         try:
             supabase.table("profiles").upsert(update, on_conflict="user_id").execute()
         except TypeError:
             supabase.table("profiles").upsert(update).execute()
-        except Exception:
-            # If full_name caused the error, retry without it
-            if "full_name" in update:
-                update_no_full = {k: v for k, v in update.items() if k != "full_name"}
-                try:
-                    supabase.table("profiles").upsert(update_no_full).execute()
-                except Exception:
-                    pass
 
-        select_cols = "credits, full_name" if _profiles_has_full_name(supabase) else "credits"
-        try:
-            prof = supabase.table("profiles").select(select_cols).eq("user_id", uid).execute()
-        except Exception:
-            prof = supabase.table("profiles").select("credits").eq("user_id", uid).execute()
-        pdata_raw = prof.get("data") if isinstance(prof, dict) else getattr(prof, "data", None)
-        if isinstance(pdata_raw, list):
-            pdata = pdata_raw[0] if pdata_raw else {}
-        elif isinstance(pdata_raw, dict):
-            pdata = pdata_raw
-        else:
-            pdata = {}
+        sel = supabase.table("profiles").select("credits, avatar_url").eq("user_id", uid).limit(1).execute()
+        raw = sel.get("data") if isinstance(sel, dict) else getattr(sel, "data", None)
+        row = raw[0] if isinstance(raw, list) and raw else {}
 
         return jsonify({
             "user_id": uid,
             "email": email,
-            "credits": pdata.get("credits", 0),
-            "full_name": pdata.get("full_name") if _profiles_has_full_name(supabase) else None
+            "credits": row.get("credits", 0),
+            "avatar_url": row.get("avatar_url")
         }), 200
-
     except Exception:
-        import traceback
         traceback.print_exc()
         return jsonify({"error": "internal_server_error"}), 500
+# ...existing code...

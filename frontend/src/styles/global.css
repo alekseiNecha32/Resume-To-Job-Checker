@@ -270,3 +270,53 @@ input { padding:10px 12px; border-radius:8px; border:1px solid rgba(15,23,42,0.0
 
 .sa-c-slate .sa-dot{ background:#64748b; }
 .sa-c-slate .sa-badge{ color:#334155; background:#f1f5f9; border-color:#e2e8f0; }
+
+.credits-gradient {
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:18px;
+  padding:16px 22px;
+  border-radius:20px;
+  background:linear-gradient(100deg,#6b46ff 0%,#b770ff 55%,#ffc2f2 100%);
+  box-shadow:0 10px 28px -8px rgba(107,70,255,0.4),0 4px 12px -4px rgba(0,0,0,0.15);
+}
+.credits-gradient .credits-value {
+  font-size:24px;
+  font-weight:800;
+  color:#fff;
+  line-height:1;
+  text-shadow:0 2px 4px rgba(0,0,0,0.25);
+  white-space:nowrap;
+}
+.credits-gradient .credits-value strong {
+  color:#fff;
+}
+.credits-gradient .credits-label {
+  display:flex;
+  flex-direction:column;
+  font-size:11px;
+  font-weight:600;
+  letter-spacing:.5px;
+  text-transform:uppercase;
+  line-height:1.05;
+  color:#f7e9ff; /* pastel contrast */
+  text-shadow:0 1px 1px rgba(0,0,0,0.15);
+  opacity:.95;
+}
+
+.credits-label {
+  font-size: 11px;
+  letter-spacing: .6px;
+  text-transform: uppercase;
+  font-weight: 600;
+  opacity: 0.85;
+}
+
+.credits-value {
+  margin-top: 6px;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.1;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.25));
+}
