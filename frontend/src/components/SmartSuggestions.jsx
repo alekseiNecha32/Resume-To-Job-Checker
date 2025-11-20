@@ -1,4 +1,3 @@
-// ...existing code...
 import { useState, useEffect } from "react";
 import { smartAnalyze, getMe, createCheckoutSession } from "../services/apiClient";
 import AuthBox from "./AuthBox";
@@ -144,141 +143,113 @@ export default function SmartSuggestions({ resumeText, jobText, jobTitle, data: 
 
           <div className="sa-body p-6 sm:p-8 bg-white/70 backdrop-blur">
 
-          {/* States */}
-          {err && (
-            <div className="mt-4 text-center">
-              <p className="text-rose-600 text-sm">{err}</p>
+            {/* States */}
+            {err && (
+              <div className="mt-4 text-center">
+                <p className="text-rose-600 text-sm">{err}</p>
 
-              {err.includes("credits") && (
-                <button
-                  onClick={onBuyClick}
-                  className="mt-3 inline-flex px-4 py-2 rounded-xl bg-indigo-600 text-white shadow hover:opacity-90"
-                >
-                  Buy 7 Smart Analyses — $7
-                </button>
-              )}
-            </div>
-          )}
+                {err.includes("credits") && (
+                  <button
+                    onClick={onBuyClick}
+                    className="mt-3 inline-flex px-4 py-2 rounded-xl bg-indigo-600 text-white shadow hover:opacity-90"
+                  >
+                    Buy 7 Smart Analyses — $7
+                  </button>
+                )}
+              </div>
+            )}
 
-          {!err && loading && (
-            <div className="mt-6 flex flex-col items-center gap-3 text-sm opacity-80">
-              <div className="sa-spinner" aria-hidden />
-              <div>Analyzing your resume against the job description…</div>
-            </div>
-          )}
+            {!err && loading && (
+              <div className="mt-6 flex flex-col items-center gap-3 text-sm opacity-80">
+                <div className="sa-spinner" aria-hidden />
+                <div>Analyzing your resume against the job description…</div>
+              </div>
+            )}
 
-          {needAuth && (
-            <div className="mt-4">
-              <AuthBox
-                onDone={async () => {
-                  setNeedAuth(false);
-                  const me = await getMe();
-                  if (me) await run();
-                }}
-              />
-            </div>
-          )}
+            {needAuth && (
+              <div className="mt-4">
+                <AuthBox
+                  onDone={async () => {
+                    setNeedAuth(false);
+                    const me = await getMe();
+                    if (me) await run();
+                  }}
+                />
+              </div>
+            )}
 
-          {/* Results */}
-          {data && !needAuth && !loading && (
-            <div className="mt-4 grid gap-6 md:grid-cols-2">
-              {/* Fit estimate ring */}
-              <div className="sa-card flex items-center gap-5">
-                <div className="sa-ring" style={ringStyle(fit)}>
-                  <div className="sa-ring-inner">
-                    <div className="text-2xl font-bold">{fit}%</div>
-                    <div className="text-[10px] uppercase tracking-wide opacity-60">Fit</div>
+            {/* Results */}
+            {data && !needAuth && !loading && (
+              <div className="mt-4 grid gap-6 md:grid-cols-2">
+                {/* Fit estimate ring */}
+                <div className="sa-card flex items-center gap-5">
+                  <div className="sa-ring" style={ringStyle(fit)}>
+                    <div className="sa-ring-inner">
+                      <div className="text-2xl font-bold">{fit}%</div>
+                      <div className="text-[10px] uppercase tracking-wide opacity-60">Fit</div>
+                    </div>
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    <div className="font-semibold text-foreground">Fit estimate</div>
+                    <div className="text-xs opacity-70">Heuristic only — not an ATS guarantee.</div>
                   </div>
                 </div>
-                <div className="text-sm text-muted-foreground">
-                  <div className="font-semibold text-foreground">Fit estimate</div>
-                  <div className="text-xs opacity-70">Heuristic only — not an ATS guarantee.</div>
+
+                {/* Critical gaps */}
+                <div className="sa-card">
+                  <div className="sa-card-title">Top Critical Gaps</div>
+                  <div className="sa-pill-cloud sa-pill-amber">
+                    {(data.critical_gaps || []).map((k) => (
+                      <span key={`cg-${k}`} className="sa-pill">{k}</span>
+                    ))}
+                  </div>
                 </div>
-              </div>
 
-              {/* Critical gaps */}
-              <div className="sa-card">
-                <div className="sa-card-title">Top Critical Gaps</div>
-                <div className="sa-pill-cloud sa-pill-amber">
-                  {(data.critical_gaps || []).map((k) => (
-                    <span key={`cg-${k}`} className="sa-pill">{k}</span>
-                  ))}
+                {/* Present */}
+                <div className="sa-card">
+                  <div className="sa-card-title">Matched (Expanded)</div>
+                  <div className="sa-pill-cloud sa-pill-green">
+                    {(data.present_skills || []).map((k) => (
+                      <span key={`ps-${k}`} className="sa-pill">{k}</span>
+                    ))}
+                  </div>
                 </div>
-              </div>
 
-              {/* Present */}
-              <div className="sa-card">
-                <div className="sa-card-title">Matched (Expanded)</div>
-                <div className="sa-pill-cloud sa-pill-green">
-                  {(data.present_skills || []).map((k) => (
-                    <span key={`ps-${k}`} className="sa-pill">{k}</span>
-                  ))}
+                {/* Missing */}
+                <div className="sa-card">
+                  <div className="sa-card-title">Missing (Smart)</div>
+                  <div className="sa-pill-cloud sa-pill-rose">
+                    {(data.missing_skills || []).map((k) => (
+                      <span key={`ms-${k}`} className="sa-pill">{k}</span>
+                    ))}
+                  </div>
                 </div>
-              </div>
 
-              {/* Missing */}
-              <div className="sa-card">
-                <div className="sa-card-title">Missing (Smart)</div>
-                <div className="sa-pill-cloud sa-pill-rose">
-                  {(data.missing_skills || []).map((k) => (
-                    <span key={`ms-${k}`} className="sa-pill">{k}</span>
-                  ))}
+                {/* Personal suggestions */}
+                <div className="md:col-span-2 sa-card">
+                  <div className="sa-card-title">Personal Suggestions</div>
+                  <ul className="sa-suggest-list">
+                    {Object.entries(data.section_suggestions || {}).flatMap(([sec, arr]) =>
+                      (arr || []).map((s, i) => {
+                        const color = colorForSection(sec);
+                        return (
+                          <li key={`${sec}-${i}`} className={`sa-suggest-item ${color}`}>
+                            <span className="sa-dot" aria-hidden />
+                            <span className="sa-badge" aria-label={`${sec} badge`}>{sec}</span>
+                            <span className="sa-suggest-text">{s}</span>
+                          </li>
+                        );
+                      })
+                    )}
+                  </ul>
                 </div>
-              </div>
 
-              {/* Personal suggestions */}
-              <div className="md:col-span-2 sa-card">
-                <div className="sa-card-title">Personal Suggestions</div>
-                <ul className="sa-suggest-list">
-                  {Object.entries(data.section_suggestions || {}).flatMap(([sec, arr]) =>
-                    (arr || []).map((s, i) => {
-                      const color = colorForSection(sec);
-                      return (
-                        <li key={`${sec}-${i}`} className={`sa-suggest-item ${color}`}>
-                          <span className="sa-dot" aria-hidden />
-                          <span className="sa-badge" aria-label={`${sec} badge`}>{sec}</span>
-                          <span className="sa-suggest-text">{s}</span>
-                        </li>
-                      );
-                    })
-                  )}
-                </ul>
-              </div>
 
-              {/* Bullets with copy */}
-              <div className="md:col-span-2 sa-card">
-                <div className="sa-card-title">Ready-to-use Bullets</div>
-                <ul className="sa-list">
-                  {(data.ready_bullets || []).map((b, i) => (
-                    <li key={`rb-${i}`} className="flex items-start gap-2">
-                      <span>{b}</span>
-                      <button
-                        className="sa-copy ml-auto"
-                        onClick={async () => { await navigator.clipboard.writeText(b); }}
-                        title="Copy"
-                      >
-                        Copy
-                      </button>
-                    </li>
-                  ))}
-                </ul>
               </div>
-
-              {/* Rewrite hints */}
-              <div className="md:col-span-2 sa-card">
-                <div className="sa-card-title">Rewrite Hints</div>
-                <ul className="sa-list">
-                  {(data.rewrite_hints || []).map((h, i) => (
-                    <li key={`rh-${i}`}>{h}</li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          )}
+            )}
           </div>
         </div>
       )}
     </div>
   );
 }
-// ...existing code...
