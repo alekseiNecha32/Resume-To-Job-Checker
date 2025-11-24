@@ -7,7 +7,7 @@ from sentence_transformers import SentenceTransformer, util
 from keybert import KeyBERT
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.cluster import KMeans
-import spacy
+# import spacy
 
 from app.utils.text_norm import normalize
 
@@ -15,10 +15,10 @@ from app.utils.text_norm import normalize
 EMB = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
 KW = KeyBERT(model="all-MiniLM-L6-v2")
 
-try:
-    NLP = spacy.load("en_core_web_sm")
-except Exception:
-    NLP = spacy.blank("en")
+# try:
+#     NLP = spacy.load("en_core_web_sm")
+# except Exception:
+#     NLP = spacy.blank("en")
 
 CANON_SKILLS = [
     "python","java","c#","javascript","typescript","react","node.js","asp.net",
@@ -28,10 +28,11 @@ CANON_SKILLS = [
     "oauth2","jwt","logging","monitoring","ml","nlp","ml.net","pandas",
     "scikit-learn","azure devops","terraform"
 ]
-ACTION_VERBS = [
+ACTION_VERBS_SET = set([
     "built","designed","implemented","optimized","migrated",
-    "automated","led","owned","delivered","deployed","scaled","mentored","improved"
-]
+    "automated","led","owned","delivered","deployed",
+    "scaled","mentored","improved","created","developed"
+])
 
 
 @dataclass
@@ -165,10 +166,9 @@ def _expand_to_canon(terms: List[str]) -> List[str]:
     picked = {CANON_SKILLS[int(sims[i].argmax())] for i in range(len(terms))}
     return sorted(picked)
 
-def _extract_action_verbs(text: str) -> List[str]:
-    doc = NLP(text)
-    verbs = {t.lemma_.lower() for t in doc if t.pos_ == "VERB" and t.lemma_.lower() in ACTION_VERBS}
-    return sorted(list(verbs))
+def _extract_action_verbs(text: str):
+    words = re.findall(r"[a-zA-Z]+", text.lower())
+    return sorted(list(ACTION_VERBS_SET.intersection(words)))
 
 # -------------------------
 # Auto suggestions (no hand rules)
