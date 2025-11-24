@@ -1,24 +1,3 @@
-// import React, { useState } from "react";
-// import AuthModal from "./AuthModal";
-// import ProfileMenu from "./ProfileMenu";
-// import CreditsModal from "./CreditsModal";
-// import { supabase } from "../lib/supabaseClient";
-// import { useMe } from "../context/MeContext.jsx";
-// import { useEffect } from "react";
-// export default function NavBar() {
-  // const { me, setMe, loading } = useMe();
-  // const [showAuth, setShowAuth] = useState(false);
-  // const [showProfile, setShowProfile] = useState(false);
-  // const [showCreditsModal, setShowCreditsModal] = useState(false);
-
-   // ...existing imports...
-  // ...existing code...
-
-    // ...existing state...
-  
-    // REPLACE the two existing effects with this one:
-
-
 import React, { useState, useEffect } from "react";
 import AuthModal from "./AuthModal";
 import ProfileMenu from "./ProfileMenu";
@@ -97,7 +76,6 @@ export default function NavBar() {
   // SINGLE auth listener
   useEffect(() => {
     const { data: sub } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log("Auth event:", event);
       if (!session) { setMe(null); return; }
       if (["INITIAL_SESSION","SIGNED_IN","USER_UPDATED","TOKEN_REFRESHED"].includes(event)) {
         if (!me) {

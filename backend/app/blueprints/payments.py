@@ -12,11 +12,11 @@ def get_user_id(req):
     # Expect a Supabase auth JWT from frontend (Authorization: Bearer <token>)
     # Use Supabase's auth API to get the user; or pass user_id in dev.
     uid = req.headers.get("X-User-Id")
-    return uid  # For dev simplicity. Replace with real JWT check later.
+    return uid  
 
 @bp.post("/checkout")
 def checkout():
-    # This would create a Stripe Checkout Session later.
+    
     if DEV_PAYMENTS:
         return jsonify({
             "dev": True,

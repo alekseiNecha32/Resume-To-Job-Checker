@@ -96,7 +96,7 @@ export default function Analyze() {
 
       // apply server profile if present (ensures exact final balance)
       if (refreshedProfile) {
-        setMe(refreshedProfile); // existing state setter
+        setMe(refreshedProfile);
         // notify any other listeners
         try {
           window.dispatchEvent(new CustomEvent("profile_updated", { detail: refreshedProfile }));

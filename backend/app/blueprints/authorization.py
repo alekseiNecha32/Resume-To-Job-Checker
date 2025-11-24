@@ -94,7 +94,6 @@ def me():
         traceback.print_exc()
         return jsonify({"error": "internal_server_error"}), 500
 
-# ...existing code...
 @auth_bp.post("/profile")
 def update_profile():
     """Upload/replace avatar. multipart/form-data field 'avatar'."""
@@ -166,4 +165,3 @@ def update_profile():
     except Exception:
         traceback.print_exc()
         return jsonify({"error": "internal_server_error"}), 500
-# ...existing code...

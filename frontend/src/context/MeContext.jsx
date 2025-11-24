@@ -53,7 +53,6 @@ export function MeProvider({ children }) {
     load();
 
     const { data: sub } = supabase.auth.onAuthStateChange((event) => {
-      console.log('Auth event:', event); // Debug log
 
       if (event === 'SIGNED_OUT') {
         // User logged out - clear everything

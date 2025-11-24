@@ -6,16 +6,13 @@ export const API_BASE = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:5000/a
 
 export async function authHeaders() {
   const { data: { session } } = await supabase.auth.getSession();
-  console.log("DEBUG session:", session);
   const headers = { "Content-Type": "application/json" };
   if (session?.access_token) {
-    console.log("DEBUG sending Authorization Bearer token");
     headers["Authorization"] = `Bearer ${session.access_token}`;
     return headers;
   }
   const devUid = import.meta.env.VITE_DEV_USER_ID;
   if (devUid) {
-    console.log("DEBUG using dev X-User-Id:", devUid);
     headers["X-User-Id"] = devUid;
     return headers;
   }

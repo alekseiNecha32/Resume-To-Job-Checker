@@ -123,7 +123,6 @@ def checkout():
         return jsonify({"error": "internal_server_error"}), 500
 
 
-# ...existing code...
 @stripe_bp.post("/webhook")
 def webhook():
     """
