@@ -7,6 +7,5 @@ joblib==1.4.2
 pdfminer.six==20240706
 python-docx==1.1.2
 sentence-transformers
-numpy
 supabase
 gunicorn
