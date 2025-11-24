@@ -7,7 +7,7 @@ from sentence_transformers import SentenceTransformer, util
 from keybert import KeyBERT
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.cluster import KMeans
-# import spacy
+
 
 from app.utils.text_norm import normalize
 
@@ -15,10 +15,6 @@ from app.utils.text_norm import normalize
 EMB = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
 KW = KeyBERT(model="all-MiniLM-L6-v2")
 
-# try:
-#     NLP = spacy.load("en_core_web_sm")
-# except Exception:
-#     NLP = spacy.blank("en")
 
 CANON_SKILLS = [
     "python","java","c#","javascript","typescript","react","node.js","asp.net",
@@ -33,7 +29,15 @@ ACTION_VERBS_SET = set([
     "automated","led","owned","delivered","deployed",
     "scaled","mentored","improved","created","developed"
 ])
+NON_TECH_GENERIC_VERBS = {
+    "led","owned","mentored" 
+}
 
+_EXTRA_TECH_SYNS = {
+    "react","reactjs","node","nodejs","sql","db","database","docker",
+    "k8s","kubernetes","azure","aws","cloud","api","rest","graphql",
+    "testing","unit","integration","ml","ai","nlp","devops","pipeline"
+}
 
 @dataclass
 class SmartAdvice:
@@ -91,11 +95,11 @@ def _is_noisy_phrase(p: str) -> bool:
     p_l = p.lower().strip()
     if len(p_l) <= 2:
         return True
-    # drop phrases that are purely letters and generic job boilerplate
+
     for sub in NOISE_SUBSTRINGS:
         if sub in p_l:
             return True
-    # overly generic phrases (no letters+digits/symbols and >4 words)
+        
     if len(p_l.split()) > 4 and not re.search(r"[0-9#\.+\-/]", p_l):
         return True
     return False
@@ -167,17 +171,51 @@ def _expand_to_canon(terms: List[str]) -> List[str]:
     return sorted(picked)
 
 def _extract_action_verbs(text: str):
-    words = re.findall(r"[a-zA-Z]+", text.lower())
-    return sorted(list(ACTION_VERBS_SET.intersection(words)))
+    """
+    Return action verbs appearing in sentences that contain tech terms.
+    Filters out generic verbs without nearby tech context.
+    """
+    if not text:
+        return []
+    txt = text.lower()
+    # Split into rough sentences
+    sentences = re.split(r'[.\n\r;!?]+', txt)
+    tech_vocab = set(CANON_SKILLS) | _EXTRA_TECH_SYNS
+    picked = set()
 
-# -------------------------
-# Auto suggestions (no hand rules)
-# -------------------------
+    for sent in sentences:
+        sent_l = sent.strip()
+        if not sent_l:
+            continue
+        # Require at least one tech token in sentence
+        if not any(t in sent_l for t in tech_vocab):
+            continue
+        words = re.findall(r'[a-zA-Z]+', sent_l)
+        for w in words:
+            if w in ACTION_VERBS_SET:
+                picked.add(w)
+
+
+    if picked:
+        tokens = re.findall(r'[a-zA-Z]+', txt)
+        positions = {i: tok for i, tok in enumerate(tokens)}
+        tech_positions = {i for i, tok in positions.items() if tok in tech_vocab}
+        refined = set()
+        for i, tok in positions.items():
+            if tok in picked:
+                window = range(max(0, i-6), min(len(tokens), i+7))
+                if tok in NON_TECH_GENERIC_VERBS and not any(j in tech_positions for j in window):
+                    continue
+                refined.add(tok)
+        picked = refined
+
+    return sorted(picked)
+
+
 def _compose_auto_suggestions(job_text: str, resume_text: str,
                               present_skills: List[str], missing_skills: List[str],
                               job_title: str) -> Tuple[Dict[str, List[str]], List[str]]:
     top = _top_job_phrases(job_text, resume_text, top_k=40)
-    # guard again against any noisy leftovers
     top = [p for p in top if not _is_noisy_phrase(p)]
     missing_phr = _sem_not_covered(top, resume_text, thr=0.78)
     themes = _cluster_themes(missing_phr, max_k=4)
@@ -186,27 +224,41 @@ def _compose_auto_suggestions(job_text: str, resume_text: str,
     for rep, items in list(themes.items())[:4]:
         if _is_noisy_phrase(rep):
             continue
-        ex = [w for w in items if w != rep][:2]
-        if ex:
-            exp.append(f"Add an experience bullet showing **{rep}** (e.g., {', '.join(ex)}) with a measurable outcome.")
+        exemplars = [w for w in items if w != rep][:2]
+        if exemplars:
+            exp.append(
+                f"Add a results‑driven bullet illustrating **{rep}** (e.g., {', '.join(exemplars)}) and quantify impact."
+            )
         else:
-            exp.append(f"Add an experience bullet showing **{rep}** with a measurable outcome.")
+            exp.append(
+                f"Add a concise bullet demonstrating **{rep}** with a clear metric (%, ms, errors reduced) and the business/context outcome."
+            )
 
     prj: List[str] = []
     top_keys = [k for k in list(themes.keys()) if not _is_noisy_phrase(k)][:3]
     if top_keys:
-        prj.append(f"Ship a small project using {', '.join(top_keys)}; include a README with metric(s) and a short demo.")
-
+        prj.append(
+            "Deliver a focused side project applying "
+            + ", ".join(top_keys)
+            + "; document architecture, automated tests, deployment steps, and 1–2 key metrics (e.g., response time, accuracy)."
+        )
 
     strengths = present_skills[:2]
-    mix = ", ".join((top_keys + strengths)[:3]) if (top_keys or strengths) else "the role’s key technologies"
-    title_txt = job_title or "this role"
-    summ = [f"Add a 2–3 line summary tailored to **{title_txt}** that mentions {mix} and a recent impact metric."]
+    mix_list = (top_keys + strengths)[:3]
+    mix = ", ".join(mix_list) if mix_list else "core technologies for the role"
+    title_txt = job_title or "the target role"
+    summ = [
+        f"Craft a professional 2–3 line summary tailored to **{title_txt}**, highlighting {mix} and a quantified accomplishment (e.g., reduced build time 30%, improved model accuracy 12pp)."
+    ]
 
     bullets: List[str] = []
     if top_keys:
-        bullets.append(f"Delivered a feature improving a key metric by Z% using {top_keys[0]}; add data and context.")
-    bullets.append("Action → Tech → Result: quantify (%/ms/errors) and keep to one sentence.")
+        bullets.append(
+            f"Implemented {top_keys[0]} solution improving a key metric by Z% (define metric: latency, reliability, conversion) while ensuring maintainable code and test coverage."
+        )
+    bullets.append(
+        "Structure each bullet: Action verb + Technology + Metric + Business/quality outcome (omit filler; keep to one sentence)."
+    )
 
     return {"Summary": summ, "Experience": exp, "Projects": prj}, bullets
 
@@ -259,4 +311,4 @@ def smart_predict_resume_improvements(resume_text: str, job_text: str, job_title
         section_suggestions=section_suggestions,
         ready_bullets=bullets[:6] or ["Add one bullet that proves measurable impact."],
         rewrite_hints=rewrite_hints
-    )
+    )  
