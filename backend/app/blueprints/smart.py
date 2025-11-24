@@ -6,12 +6,6 @@ from dotenv import load_dotenv
 
 smart_bp = Blueprint("smart", __name__, url_prefix="/api/smart")
 
-
-# connect to Supabase
-# SUPABASE_URL = os.environ["SUPABASE_URL"]
-# SUPABASE_KEY = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
-# supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-
 def get_user_id():
     """Temporary dev helper — replace with JWT decoding later."""
     return request.headers.get("X-User-Id") 
@@ -134,3 +128,10 @@ def analyze():
         print("UNCAUGHT /smart/analyze exception:")
         traceback.print_exc()
         return jsonify({"error": "internal_server_error"}), 500
+
+
+
+# connect to Supabase
+# SUPABASE_URL = os.environ["SUPABASE_URL"]
+# SUPABASE_KEY = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
+# supabase = create_client(SUPABASE_URL, SUPABASE_KEY)

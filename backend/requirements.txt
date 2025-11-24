@@ -9,3 +9,4 @@ python-docx==1.1.2
 sentence-transformers
 supabase
 gunicorn
+keybert==0.7.0
