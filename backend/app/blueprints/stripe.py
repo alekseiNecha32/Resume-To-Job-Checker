@@ -3,6 +3,8 @@ import json
 import stripe
 from flask import Blueprint, request, jsonify, current_app
 from supabase import create_client
+from dotenv import load_dotenv
+load_dotenv()
 
 stripe_bp = Blueprint("stripe_payments", __name__, url_prefix="/api/payments")
 

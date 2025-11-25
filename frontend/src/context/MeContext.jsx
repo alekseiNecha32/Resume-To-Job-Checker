@@ -52,21 +52,26 @@ export function MeProvider({ children }) {
 
     load();
 
-    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
+  const { data: sub } = supabase.auth.onAuthStateChange((event) => {
+  console.log("auth event ->", event);  // helpful for debugging
 
-      if (event === 'SIGNED_OUT') {
-        // User logged out - clear everything
-        if (mounted) {
-          setMe(null);
-          try {
-            localStorage.removeItem("cachedProfile");
-          } catch { }
-        }
-      } else {
-        // Refresh in background to avoid visible flicker
-        load();
-      }
-    });
+  if (event === "SIGNED_OUT") {
+    if (mounted) {
+      setMe(null);
+      try { localStorage.removeItem("cachedProfile"); } catch {}
+    }
+    return;
+  }
+
+  // Only reload profile on these events
+  if (
+    event === "SIGNED_IN" ||
+    event === "INITIAL_SESSION" ||
+    event === "USER_UPDATED"
+  ) {
+    load();  // will call /api/me once for each of these transitions
+  }
+});
 
     const onProfile = (e) => {
       if (e?.detail) {

@@ -75,17 +75,31 @@ export default function NavBar() {
 
   // SINGLE auth listener
   useEffect(() => {
-    const { data: sub } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (!session) { setMe(null); return; }
-      if (["INITIAL_SESSION","SIGNED_IN","USER_UPDATED","TOKEN_REFRESHED"].includes(event)) {
+  const { data: sub } = supabase.auth.onAuthStateChange(
+    async (event, session) => {
+      if (!session) {
+        setMe(null);
+        return;
+      }
+
+      if (["INITIAL_SESSION","SIGNED_IN","USER_UPDATED","TOKEN_REFRESHED"]
+          .includes(event)) {
+
         if (!me) {
-          setMe({ email: session.user.email, avatar_url: null, credits: null });
+          setMe({
+            email: session.user.email,
+            avatar_url: null,
+            credits: null,
+          });
         }
+
         hydrateProfile(session.access_token);
       }
-    });
-    return () => sub.subscription.unsubscribe();
-  }, [me, setMe]);
+    }
+  );
+
+  return () => sub.subscription.unsubscribe();
+}, []);
 
  function onAuthSuccess() {
     setShowAuth(false); // auth listener will populate me
