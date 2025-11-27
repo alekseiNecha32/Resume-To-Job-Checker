@@ -18,7 +18,7 @@ def create_app():
         app,
         resources={
             r"/api/*": {
-                "origins": ["http://localhost:5173", "http://127.0.0.1:5173"],
+                "origins": ["http://localhost:5173", "http://127.0.0.1:5173", "https://resume-tojob.onrender.com"],
                 "supports_credentials": True,
                 "methods": ["GET", "POST", "OPTIONS"],
                 "expose_headers": ["Content-Type", "Authorization"],
