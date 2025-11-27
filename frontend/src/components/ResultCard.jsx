@@ -5,9 +5,6 @@ export default function ResultCard({ data }) {
   const matched = Array.isArray(data.matches) ? data.matches : (data.matched_keywords ?? []);
   const missing = Array.isArray(data.missing_keywords) ? data.missing_keywords : [];
 
-  const textSimilarity = data?.breakdown?.text_similarity;
-  const keywordCoverage = data?.breakdown?.keyword_coverage;
-
   const color =
     score >= 80 ? "#059669" : 
       score >= 60 ? "#d97706" : 
@@ -22,38 +19,56 @@ export default function ResultCard({ data }) {
         </span>
       </div>
 
-      {matched.length > 0 && (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginTop: 14 }}>
-          <div>
-            <p className="mt-2 text-sm text-muted-foreground">
-              {matched.length} matched keywords • {data.score}% overall match
-            </p>
-            <h3 style={{ color: "#065f46", fontWeight: 700, marginBottom: 8 }}>Matched Keywords</h3>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-              {matched.map((k, i) => (
-                <span key={`${k}-${i}`} className="pill pill-ok">{k}</span>
-              ))}
+      {(matched.length > 0 || missing.length > 0) && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginTop: 20 }}>
+          {matched.length > 0 && (
+            <div>
+              <h3 style={{ color: "#059669", fontWeight: 700, marginBottom: 12 }}>Matched Keywords</h3>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {matched.map((kw, i) => (
+                  <span 
+                    key={i} 
+                    style={{
+                      background: "#dcfce7",
+                      color: "#166534",
+                      padding: "4px 10px",
+                      borderRadius: 6,
+                      fontSize: 14,
+                      fontWeight: 600,
+                      border: "1px solid #86efac"
+                    }}
+                  >
+                    {kw}
+                  </span>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           {missing.length > 0 && (
             <div>
-              <h3 style={{ color: "#991b1b", fontWeight: 700, marginBottom: 8 }}>Missing Keywords</h3>
+              <h3 style={{ color: "#dc2626", fontWeight: 700, marginBottom: 12 }}>Missing Keywords</h3>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                {missing.map((k, i) => (
-                  <span key={`${k}-${i}`} className="pill pill-miss">{k}</span>
+                {missing.map((kw, i) => (
+                  <span 
+                    key={i}
+                    style={{
+                      background: "#fee2e2",
+                      color: "#7f1d1d",
+                      padding: "4px 10px",
+                      borderRadius: 6,
+                      fontSize: 14,
+                      fontWeight: 600,
+                      border: "1px solid #fca5a5"
+                    }}
+                  >
+                    {kw}
+                  </span>
                 ))}
               </div>
             </div>
           )}
         </div>
-      )}
-
-      {(textSimilarity != null || keywordCoverage != null) && (
-        <p style={{ marginTop: 12, color: "#64748b" }}>
-          {textSimilarity != null && <>Text similarity: {textSimilarity} • </>}
-          {keywordCoverage != null && <>Keyword coverage: {keywordCoverage}</>}
-        </p>
       )}
     </div>
   );

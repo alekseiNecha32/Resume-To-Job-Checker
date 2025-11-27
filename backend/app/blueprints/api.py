@@ -68,34 +68,27 @@ def _as_text(v):
 
 @api_bp.route("/score", methods=["POST", "OPTIONS"])
 def score_resume_to_job():
+    # Handle CORS preflight
     if request.method == "OPTIONS":
         return ("", 204)
 
     data = request.get_json(silent=True) or {}
 
+    # Accept both camelCase and snake_case
     resume_text = _as_text(data.get("resumeText") or data.get("resume_text")).strip()
-    job_text = _as_text(data.get("jobText")   or data.get("job_text")).strip()
-    job_title = _as_text(data.get("jobTitle")  or data.get("job_title")).strip()
+    job_text    = _as_text(data.get("jobText")    or data.get("job_text")).strip()
+    job_title   = _as_text(data.get("jobTitle")   or data.get("job_title")).strip()
 
     if not resume_text or not job_text:
         return jsonify({"error": "Missing fields: resumeText, jobText"}), 400
 
     MAX_CHARS = 20000
-    if len(resume_text) > MAX_CHARS: resume_text = resume_text[:MAX_CHARS]
-    if len(job_text) > MAX_CHARS: job_text = job_text[:MAX_CHARS]
-
-    emb_resume = _SBERT.encode(resume_text, convert_to_tensor=True, normalize_embeddings=True)
-    emb_job = _SBERT.encode(job_text, convert_to_tensor=True, normalize_embeddings=True)
-    similarity = float(util.cos_sim(emb_resume, emb_job).item())
-
-    shared = len(set(resume_text.split()) & set(job_text.split()))
-    penalty = 0.15 if shared < 5 else 0.0
-    adjusted = max(similarity - penalty, 0.0)
-    score = round(adjusted * 100)
-
+    if len(resume_text) > MAX_CHARS:
+        resume_text = resume_text[:MAX_CHARS]
+    if len(job_text) > MAX_CHARS:
+        job_text = job_text[:MAX_CHARS]
     import re
     from collections import Counter
-
     WORD_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9.+#/-]*")
 
     TITLE_STOP = {
@@ -122,9 +115,12 @@ def score_resume_to_job():
         return [t.lower() for t in WORD_RE.findall(s or "")]
 
     def is_noise(tok: str) -> bool:
-        if tok in STOPWORDS: return True
-        if tok in TITLE_STOP: return True
-        if tok.isnumeric(): return True
+        if tok in STOPWORDS:
+            return True
+        if tok in TITLE_STOP:
+            return True
+        if tok.isnumeric():
+            return True
         if len(tok) <= 2 and tok not in {"c#","go","r","ui","ux"}:
             return True
         return False
@@ -135,12 +131,13 @@ def score_resume_to_job():
             if not is_noise(a) and not is_noise(b):
                 yield f"{a} {b}"
 
-    # tokens
-    resume_tokens = set(tokenize(resume_text))
+    # ---- build keyword list from JD ----
     job_tokens_raw = tokenize(job_text)
     job_tokens = [t for t in job_tokens_raw if not is_noise(t)]
 
-    # frequency from JD
+    if not job_tokens:
+        return jsonify({"error": "No useful tokens in job description"}), 400
+
     freq = Counter(job_tokens)
 
     # boost any token that is in SKILL_HINTS
@@ -157,8 +154,10 @@ def score_resume_to_job():
     for bg, cnt in bi.items():
         a, b = bg.split()
         bonus = 0.0
-        if a in SKILL_HINTS or b in SKILL_HINTS: bonus += 0.8
-        if re.search(r"[.+#/-]", a) or re.search(r"[.+#/-]", b): bonus += 0.8
+        if a in SKILL_HINTS or b in SKILL_HINTS:
+            bonus += 0.8
+        if re.search(r"[.+#/-]", a) or re.search(r"[.+#/-]", b):
+            bonus += 0.8
         bi[bg] = cnt + bonus
 
     MAX_UNI = 16
@@ -172,17 +171,23 @@ def score_resume_to_job():
 
     title_phrase = job_title.lower().strip()
     if title_phrase and len(title_tokens) >= 2:
-        ordered.append(title_phrase); seen.add(title_phrase)
+        ordered.append(title_phrase)
+        seen.add(title_phrase)
 
     for p in top_bi:
         if p not in seen:
-            ordered.append(p); seen.add(p)
+            ordered.append(p)
+            seen.add(p)
 
     for w in top_uni:
         if w not in seen:
-            ordered.append(w); seen.add(w)
+            ordered.append(w)
+            seen.add(w)
 
     job_keywords = ordered
+
+    # ---- check what the resume actually covers ----
+    resume_tokens = set(tokenize(resume_text))
 
     def literal_hit(term: str, text: str) -> bool:
         pattern = re.escape(term.lower()).replace(r"\ ", r"\s+")
@@ -190,22 +195,33 @@ def score_resume_to_job():
 
     matched, missing = [], []
     for kw in job_keywords:
-        if " " in kw:  
+        if " " in kw:          # bigram / phrase
             hit = literal_hit(kw, resume_text)
-        else:       
+        else:                  # unigram
             hit = kw in resume_tokens
         (matched if hit else missing).append(kw)
 
     total = len(job_keywords)
-    coverage = round((len(matched) / total) * 100) if total else 0
+    coverage = (len(matched) / total) if total else 0.0
+    score = int(round(coverage * 100))
+
+    # similarity here is just coverage as a 0–1 number so your client fallback still works
+    similarity = round(coverage, 4)
 
     return jsonify({
-        "model": "sentence-transformers/all-MiniLM-L6-v2",
-        "similarity": round(similarity, 4),
+        "model": "simple-keyword-v1",
+        "similarity": similarity,
         "score": score,
+
+        # new names
         "matchedKeywords": matched,
         "missingKeywords": missing,
         "jobKeywords": job_keywords,
-        "coverage": coverage,
-        "totalKeywords": total
+        "coverage": round(coverage * 100),
+        "totalKeywords": total,
+
+        # legacy names (so existing frontend code is happy)
+        "matches": matched,
+        "missing_keywords": missing,
+        "denominator": total,
     }), 200

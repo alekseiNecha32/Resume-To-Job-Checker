@@ -17,16 +17,11 @@ export default function Analyze() {
   const [parsing, setParsing] = useState(false);
   const [result, setResult] = useState(null);
   const [jobTitle, setJobTitle] = useState("");
-
-  // profile / credits
   const [me, setMe] = useState(null);
   const [loadingMe, setLoadingMe] = useState(true);
-
-  // smart analysis state
   const [smartResult, setSmartResult] = useState(null);
   const [runningSmart, setRunningSmart] = useState(false);
 
-  // fetch profile
   useEffect(() => {
     let mounted = true;
     async function loadMe() {
@@ -40,10 +35,7 @@ export default function Analyze() {
       }
     }
     loadMe();
-
-    // subscribe to auth changes so UI updates automatically after login/logout
     const { data: sub } = supabase.auth.onAuthStateChange(() => {
-      // re-fetch profile when auth state changes
       loadMe();
     });
     return () => {
@@ -52,13 +44,6 @@ export default function Analyze() {
     };
   }, []);
 
-  const [showCreditsModal, setShowCreditsModal] = useState(false);
-
-  function handleBuyCredits() {
-    setShowCreditsModal(true);
-  }
-
-  // Run smart analysis on click. Backend should handle decrementing credits.
   async function handleRunSmartAnalysis() {
     if (runningSmart) return;
     if (!resumeText.trim() || !job.trim()) {
@@ -74,7 +59,6 @@ export default function Analyze() {
       return;
     }
 
-    // Optimistic UI: decrement 1 immediately so user sees feedback (will be corrected from server)
     const prevCredits = me.credits ?? 0;
     const optimistic = { ...me, credits: prevCredits - 1 };
     setMe(optimistic);
@@ -90,14 +74,10 @@ export default function Analyze() {
       });
 
       const payload = (analysis && (analysis.data || analysis.result || analysis.analysis)) || analysis || null;
-
-      // show analysis
       setSmartResult(payload);
 
-      // apply server profile if present (ensures exact final balance)
       if (refreshedProfile) {
         setMe(refreshedProfile);
-        // notify any other listeners
         try {
           window.dispatchEvent(new CustomEvent("profile_updated", { detail: refreshedProfile }));
         } catch (_e) { }
@@ -111,7 +91,6 @@ export default function Analyze() {
         }
       }
     } catch (e) {
-      // rollback optimistic decrement on error
       setMe({ ...me, credits: prevCredits });
       alert(e.message || "Smart analysis failed.");
     } finally {
@@ -120,7 +99,6 @@ export default function Analyze() {
   }
 
   const ready = resumeText.trim().length > 0 && job.trim().length > 0;
-
   const inputRef = useRef(null);
   const onBrowseClick = () => inputRef.current?.click();
 
@@ -165,7 +143,6 @@ export default function Analyze() {
 
   return (
     <div className="relative min-h-screen p-6 overflow-hidden">
-      {/* background */}
       <div
         className="pointer-events-none absolute inset-0 -z-10
         [background:
@@ -184,13 +161,9 @@ export default function Analyze() {
         </header>
 
         <div className="grid gap-6 md:grid-cols-2">
-          {/* LEFT: Upload */}
           <section>
             <div className="text-sm font-semibold">Upload Your Resume</div>
-            <div className="text-xs text-muted-foreground mb-2">
-              PDF, DOCX or TXT (max 5MB)
-            </div>
-
+            <div className="text-xs text-muted-foreground mb-2">PDF, DOCX or TXT (max 5MB)</div>
             <div
               className="dropzone h-[260px] relative cursor-pointer"
               onDragOver={(e) => e.preventDefault()}
@@ -223,7 +196,6 @@ export default function Analyze() {
             </div>
           </section>
 
-          {/*Job Description */}
           <section>
             <div className="text-sm font-semibold mb-2">Job Title</div>
             <input
@@ -247,10 +219,9 @@ export default function Analyze() {
           </section>
         </div>
 
-        {/* Action */}
         <div className="mt-8 flex justify-center">
           <button
-            className={`px-4 py-2 rounded-xl bg-indigo-600 text-white hover:opacity-90 disabled:opacity-50`}
+            className="px-4 py-2 rounded-xl bg-indigo-600 text-white hover:opacity-90 disabled:opacity-50"
             onClick={handleAnalyze}
             disabled={!ready || loading || parsing}
           >
@@ -258,101 +229,44 @@ export default function Analyze() {
           </button>
         </div>
 
-        {/* Results */}
-        <div className="mt-6">
-          {result && <ResultCard data={result} />}
-
-          {result?.matchedKeywords && result?.missingKeywords && (
-            <div className="mt-8 space-y-6">
-              <h3 className="text-lg font-semibold">Keyword Analysis</h3>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Matched */}
-                <div className="p-4 rounded-xl border bg-green-50 border-green-200">
-                  <h4 className="font-medium text-green-800 mb-2">
-                    ✅ Matched Keywords ({result.matchedKeywords.length})
-                  </h4>
-
-                  {result.matchedKeywords.length > 0 ? (
-                    <div className="flex flex-wrap gap-2">
-                      {result.matchedKeywords.map((word) => (
-                        <span
-                          key={`m-${word}`}
-                          className="px-2 py-1 text-sm rounded-full bg-green-200 text-green-800"
-                        >
-                          {word}
-                        </span>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-gray-500">No matched keywords found.</p>
-                  )}
-                </div>
-
-                {/* Missing */}
-                <div className="p-4 rounded-xl border bg-rose-50 border-rose-200">
-                  <h4 className="font-medium text-rose-800 mb-2">
-                    ⚠️ Missing Keywords ({result.missingKeywords.length})
-                  </h4>
-
-                  {result.missingKeywords.length > 0 ? (
-                    <div className="flex flex-wrap gap-2">
-                      {result.missingKeywords.map((word) => (
-                        <span
-                          key={`x-${word}`}
-                          className="px-2 py-1 text-sm rounded-full bg-rose-200 text-rose-900"
-                        >
-                          {word}
-                        </span>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-gray-500">None missing — great match!</p>
-                  )}
-                </div>
-              </div>
-
-              <div className="flex justify-center mt-8 w-full">
-                <div className="w-full max-w-4xl">
-
-
-                  <div className="flex justify-center mt-8 w-full">
-                    <div className="w-full max-w-4xl">
-                      <div className="p-6 rounded-xl border bg-white/50 text-center">
-                        <h3 className="font-semibold">Smart Analysis</h3>
-                        <p className="text-sm text-muted-foreground">Use Smart Analysis to get AI suggestions (cost: 1 credit).</p>
-                        <div className="mt-3 flex items-center justify-center gap-3">
-                          <button
-                            onClick={handleRunSmartAnalysis}
-                            disabled={runningSmart || ((me?.credits ?? 0) <= 0)}
-                            className="px-6 py-3 rounded-xl bg-indigo-600 text-white disabled:opacity-50"
-                          >
-                            {runningSmart ? "Analyzing…" : "Run Smart Analysis"}
-                          </button>
-                          <div className="text-sm text-muted-foreground">Credits: {me?.credits ?? 0}</div>
-                        </div>
-
-                        {/* Render the suggestions panel when smartResult is present */}
-                        {smartResult && (
-                          <div className="mt-6">
-                            <SmartSuggestions
-                              data={smartResult}
-                              resumeText={resumeText}
-                              jobText={job}
-                              jobTitle={jobTitle}
-                            />
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                </div>
-              </div>
+        {result && (
+          <div className="mt-8 flex justify-center w-full">
+            <div className="w-full max-w-4xl">
+              <ResultCard data={result} />
             </div>
-          )}
+          </div>
+        )}
+
+        <div className="mt-8 flex justify-center w-full">
+          <div className="w-full max-w-4xl">
+            <div className="p-6 rounded-xl border bg-white/50 text-center">
+              <h3 className="font-semibold">Smart Analysis</h3>
+              <p className="text-sm text-muted-foreground">Use Smart Analysis to get AI suggestions (cost: 1 credit).</p>
+              <div className="mt-3 flex items-center justify-center gap-3">
+                <button
+                  onClick={handleRunSmartAnalysis}
+                  disabled={runningSmart || ((me?.credits ?? 0) <= 0)}
+                  className="px-6 py-3 rounded-xl bg-indigo-600 text-white disabled:opacity-50"
+                >
+                  {runningSmart ? "Analyzing…" : "Run Smart Analysis"}
+                </button>
+                <div className="text-sm text-muted-foreground">Credits: {me?.credits ?? 0}</div>
+              </div>
+
+              {smartResult && (
+                <div className="mt-6">
+                  <SmartSuggestions
+                    data={smartResult}
+                    resumeText={resumeText}
+                    jobText={job}
+                    jobTitle={jobTitle}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </div>
-  )
-};
+  );
+}
