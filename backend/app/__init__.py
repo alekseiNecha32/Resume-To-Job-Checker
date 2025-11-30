@@ -15,17 +15,21 @@ def create_app():
     app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev")
 
     CORS(
-        app,
-        resources={
-            r"/api/*": {
-                "origins": ["http://localhost:5173", "http://127.0.0.1:5173", "https://resume-to-job-checker-5.onrender.com"],
-                "supports_credentials": True,
-                "methods": ["GET", "POST", "OPTIONS"],
-                "expose_headers": ["Content-Type", "Authorization"],
-                "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"],
-            }
+    app,
+    resources={
+        r"/api/*": {
+            "origins": [
+                "http://localhost:5173",
+                "http://127.0.0.1:5173",
+                "https://resume-to-job-checker-5.onrender.com",  # FRONTEND URL
+            ],
+            "supports_credentials": True,
+            "methods": ["GET", "POST", "OPTIONS"],
+            "expose_headers": ["Content-Type", "Authorization"],
+            "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"],
         },
-    )
+    },
+)
 
     
     app.register_blueprint(api_bp)  
