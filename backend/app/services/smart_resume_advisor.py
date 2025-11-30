@@ -12,8 +12,22 @@ from sklearn.cluster import KMeans
 from app.utils.text_norm import normalize
 
 
-EMB = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
-KW = KeyBERT(model="all-MiniLM-L6-v2")
+_EMB = None
+_KW = None
+
+def get_emb():
+    global _EMB
+    if _EMB is None:
+        print("Loading MiniLM embedder...")
+        _EMB = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
+    return _EMB
+
+def get_kw():
+    global _KW
+    if _KW is None:
+        print("Loading KeyBERT...")
+        _KW = KeyBERT(model="all-MiniLM-L6-v2")
+    return _KW
 
 
 CANON_SKILLS = [
@@ -51,7 +65,9 @@ class SmartAdvice:
     rewrite_hints: List[str]
 
 def _embed(text: str):
-    return EMB.encode([text], normalize_embeddings=True)
+    model = get_emb()  # ✅ FIX
+    return model.encode([text], normalize_embeddings=True)
+
 
 
 def _sim(a: str, b: str) -> float:
@@ -61,8 +77,9 @@ def _sim(a: str, b: str) -> float:
 
 
 def _keybert_terms(text: str, top_n=12) -> List[str]:
+    kw = get_kw()  # ✅ FIX
     terms = []
-    for term, _ in KW.extract_keywords(text, top_n=top_n, stop_words="english"):
+    for term, _ in kw.extract_keywords(text, top_n=top_n, stop_words="english"):
         term = normalize(term)
         if len(term) >= 3 and term not in terms:
             terms.append(term)
@@ -128,11 +145,11 @@ def _top_job_phrases(job_text: str, resume_text: str, top_k: int = 40) -> List[s
     return out[:top_k]
 
 def _sem_not_covered(phrases: List[str], resume_text: str, thr: float = 0.78) -> List[str]:
-    """Keep job phrases that the resume doesn't already cover semantically."""
     if not phrases:
         return []
-    res_vec = EMB.encode([resume_text], normalize_embeddings=True)[0]
-    ph_vecs = EMB.encode(phrases, normalize_embeddings=True)
+    model = get_emb()  # ✅ FIX
+    res_vec = model.encode([resume_text], normalize_embeddings=True)[0]
+    ph_vecs = model.encode(phrases, normalize_embeddings=True)
     res_n = np.linalg.norm(res_vec) + 1e-12
     keep = []
     for p, v in zip(phrases, ph_vecs):
@@ -142,12 +159,12 @@ def _sem_not_covered(phrases: List[str], resume_text: str, thr: float = 0.78) ->
     return keep
 
 def _cluster_themes(phrases: List[str], max_k: int = 4) -> Dict[str, List[str]]:
-    """Cluster remaining phrases (MiniLM) into themes to drive suggestions."""
     if not phrases:
         return {}
     if len(phrases) <= 6:
         return {phrases[0]: phrases}
-    V = EMB.encode(phrases, normalize_embeddings=True)
+    model = get_emb()  # ✅ FIX
+    V = model.encode(phrases, normalize_embeddings=True)
     k = min(max_k, max(2, len(phrases) // 6))
     km = KMeans(n_clusters=k, n_init="auto", random_state=42)
     labels = km.fit_predict(V)
@@ -160,12 +177,12 @@ def _cluster_themes(phrases: List[str], max_k: int = 4) -> Dict[str, List[str]]:
         groups[rep] = [phrases[i] for i in idxs]
     return groups
 
-
 def _expand_to_canon(terms: List[str]) -> List[str]:
     if not terms:
         return []
-    e_can = EMB.encode(CANON_SKILLS, normalize_embeddings=True)
-    e_terms = EMB.encode(terms, normalize_embeddings=True)
+    model = get_emb()  # ✅ FIX
+    e_can = model.encode(CANON_SKILLS, normalize_embeddings=True)
+    e_terms = model.encode(terms, normalize_embeddings=True)
     sims = util.cos_sim(e_terms, e_can)
     picked = {CANON_SKILLS[int(sims[i].argmax())] for i in range(len(terms))}
     return sorted(picked)

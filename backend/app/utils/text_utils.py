@@ -1,7 +1,16 @@
 import numpy as np
 from sentence_transformers import SentenceTransformer
 
-_model = SentenceTransformer("all-MiniLM-L6-v2")
+_model = None
+
+def get_model():
+    global _model
+    if _model is None:
+        print("Loading MiniLM for text_utils...")
+        _model = SentenceTransformer("all-MiniLM-L6-v2")
+    return _model
+
+
 
 def chunk_text(text: str, max_chars: int = 1000):
     """Split text into chunks to avoid model input length limits."""
@@ -22,14 +31,15 @@ def chunk_text(text: str, max_chars: int = 1000):
 def embed_text(text: str) -> np.ndarray:
     """Embed possibly long text safely."""
     try:
+        model = get_model()  # ✅ Lazy load
         chunks = chunk_text(text)
         if not chunks:
-            return np.zeros((_model.get_sentence_embedding_dimension(),), dtype=np.float32)
-        embeddings = _model.encode(chunks, normalize_embeddings=True)
+            return np.zeros((model.get_sentence_embedding_dimension(),), dtype=np.float32)
+        embeddings = model.encode(chunks, normalize_embeddings=True)
         return np.mean(embeddings, axis=0)
     except Exception as e:
         print(f"[text_utils] Embedding failed: {e}")
-        return np.zeros((_model.get_sentence_embedding_dimension(),), dtype=np.float32)
+        return np.zeros((384,), dtype=np.float32)
 
 def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
     a_norm = a / (np.linalg.norm(a) + 1e-12)

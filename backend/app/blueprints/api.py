@@ -4,8 +4,24 @@ from app.utils.extractors import extract_any, sniff_ext
 
 from sentence_transformers import SentenceTransformer, util
 
-_SBERT = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
-_ = _SBERT.encode("warmup", convert_to_tensor=True, normalize_embeddings=True)
+# Global model cache - load only once
+_SBERT = None
+
+def get_sbert_model():
+    """Lazy load SentenceTransformer to avoid memory issues"""
+    global _SBERT
+    if _SBERT is None:
+        print("🔄 Loading SentenceTransformer model (first request)...")
+        try:
+            _SBERT = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
+            # Warmup
+            _ = _SBERT.encode("warmup", convert_to_tensor=True, normalize_embeddings=True)
+            print("✅ Model loaded successfully")
+        except Exception as e:
+            print(f"❌ Failed to load model: {e}")
+            _SBERT = None
+            raise
+    return _SBERT
 
 api_bp = Blueprint("api", __name__, url_prefix="/api")
 
@@ -205,22 +221,30 @@ def score_resume_to_job():
     coverage = (len(matched) / total) if total else 0.0
     score = int(round(coverage * 100))
 
-    # similarity here is just coverage as a 0–1 number so your client fallback still works
     similarity = round(coverage, 4)
+
+    # ✅ ADD SEMANTIC SCORING HERE (optional)
+    # try:
+    #     model = get_sbert_model()
+    #     resume_emb = model.encode(resume_text, convert_to_tensor=True, normalize_embeddings=True)
+    #     job_emb = model.encode(job_text, convert_to_tensor=True, normalize_embeddings=True)
+    #     semantic_score = float(util.pytorch_cos_sim(resume_emb, job_emb)[0][0])
+        
+    #     # Blend keyword score (60%) + semantic (40%)
+    #     final_score = int(round(score * 0.6 + semantic_score * 100 * 0.4))
+    # except Exception as e:
+    #     print(f"Semantic scoring failed: {e}")
+    #     final_score = score
 
     return jsonify({
         "model": "simple-keyword-v1",
         "similarity": similarity,
         "score": score,
-
-        # new names
         "matchedKeywords": matched,
         "missingKeywords": missing,
         "jobKeywords": job_keywords,
         "coverage": round(coverage * 100),
         "totalKeywords": total,
-
-        # legacy names (so existing frontend code is happy)
         "matches": matched,
         "missing_keywords": missing,
         "denominator": total,
