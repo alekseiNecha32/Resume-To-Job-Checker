@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { supabase } from "../lib/supabaseClient";
+import { apiCallWithAuth } from "../services/apiClient";  // ✅ Import from apiClient
 
 export default function AvatarUploader({ onDone }) {
   const [file, setFile] = useState(null);
@@ -8,22 +9,29 @@ export default function AvatarUploader({ onDone }) {
 
   async function handleUpload() {
     if (!file) return;
-    setUploading(true); setMsg(null);
+    setUploading(true);
+    setMsg(null);
     try {
-      const token = (await supabase.auth.getSession()).data?.session?.access_token;
+      const { data: sessionData } = await supabase.auth.getSession();  // ✅ Rename to sessionData
+      const token = sessionData?.session?.access_token;
       if (!token) throw new Error("Not authenticated");
+      
       const form = new FormData();
       form.append("avatar", file);
-      const resp = await fetch("/api/profile", {
+      
+      const resp = await apiCallWithAuth("/profile", token, {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
         body: form
       });
-      const data = await resp.json();
-      if (!resp.ok) throw new Error(data.error || "Upload failed");
+      
+      const uploadData = await resp.json();  // ✅ Rename to uploadData
+      if (!resp.ok) throw new Error(uploadData.error || "Upload failed");
+      
+      console.log("✅ Avatar uploaded:", uploadData);
       setMsg("Updated");
-      onDone?.(data);
+      onDone?.(uploadData);
     } catch (e) {
+      console.error("❌ Upload error:", e);
       setMsg(e.message);
     } finally {
       setUploading(false);
@@ -32,8 +40,18 @@ export default function AvatarUploader({ onDone }) {
 
   return (
     <div>
-      <input type="file" accept="image/*" onChange={e => setFile(e.target.files?.[0] || null)} />
-      {file && <img src={URL.createObjectURL(file)} alt="preview" style={{ width: 64, height: 64, borderRadius: "50%", objectFit: "cover", marginTop: 8 }} />}
+      <input 
+        type="file" 
+        accept="image/*" 
+        onChange={e => setFile(e.target.files?.[0] || null)} 
+      />
+      {file && (
+        <img 
+          src={URL.createObjectURL(file)} 
+          alt="preview" 
+          style={{ width: 64, height: 64, borderRadius: "50%", objectFit: "cover", marginTop: 8 }} 
+        />
+      )}
       <button disabled={!file || uploading} onClick={handleUpload}>
         {uploading ? "Uploading…" : "Save Avatar"}
       </button>
