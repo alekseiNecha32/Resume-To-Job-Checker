@@ -56,35 +56,54 @@ def analyze():
 
         if credits <= 0:
             return jsonify({"error": "no_credits", "message": "Please purchase credits to use Smart Analysis."}), 402
+        
+
 
         d = request.get_json(force=True)
+        if not d or not d.get("resume_text") or not d.get("job_text"):
+            return jsonify({"error": "Missing resume_text or job_text"}), 400
+
+        print(f"Starting smart analysis for user {uid}...")
         res = smart_predict_resume_improvements(
             resume_text=d.get("resume_text", ""),
             job_text=d.get("job_text", ""),
             job_title=d.get("job_title", "")
         )
+        
+        if res is None:
+            return jsonify({"error": "Analysis failed - returned None"}), 500
 
-        supabase.table("profiles").update({"credits": credits - 1}).eq("user_id", uid).execute()
+        # Deduct credits
+        try:
+            supabase.table("profiles").update({"credits": credits - 1}).eq("user_id", uid).execute()
+        except Exception as e:
+            logger.error(f"Failed to deduct credits: {e}")
+            # Don't fail - user already got analysis
+            pass
 
-        supabase.table("analyses").insert({
-            "user_id": uid,
-            "job_title": d.get("job_title", ""),
-            "fit_estimate": res.fit_estimate,
-            "payload": {
+        # Save to DB
+        try:
+            supabase.table("analyses").insert({
+                "user_id": uid,
+                "job_title": d.get("job_title", ""),
                 "fit_estimate": res.fit_estimate,
-                "similarity_resume_job": res.sim_resume_jd,
-                "present_skills": res.present_skills,
-                "missing_skills": res.missing_skills,
-                "critical_gaps": res.critical_gaps,
-                "section_suggestions": res.section_suggestions,
-                "ready_bullets": res.ready_bullets,
-                "rewrite_hints": res.rewrite_hints,
-            },
-            "resume_excerpt": d.get("resume_text", "")[:300]
-        }).execute()
+                "payload": {
+                    "fit_estimate": res.fit_estimate,
+                    "similarity_resume_job": res.sim_resume_jd,
+                    "present_skills": res.present_skills,
+                    "missing_skills": res.missing_skills,
+                    "critical_gaps": res.critical_gaps,
+                    "section_suggestions": res.section_suggestions,
+                    "ready_bullets": res.ready_bullets,
+                    "rewrite_hints": res.rewrite_hints,
+                },
+                "resume_excerpt": d.get("resume_text", "")[:300]
+            }).execute()
+        except Exception as e:
+            logger.error(f"Failed to save analysis: {e}")
+            # Don't fail - analysis is done
 
-        logger.info("smart_analyze uid=%s credits_before=%d fit=%.2f missing=%d",
-                    uid, credits, res.fit_estimate, len(res.missing_skills))
+        logger.info(f"smart_analyze uid={uid} fit={res.fit_estimate} missing={len(res.missing_skills)}")
 
         return jsonify({
             "fit_estimate": res.fit_estimate,
@@ -99,5 +118,6 @@ def analyze():
         }), 200
 
     except Exception as e:
-        logger.error("smart_analyze error=%s", e, exc_info=True)
-        return jsonify({"error": "internal_server_error"}), 500
+        logger.error(f"smart_analyze error: {e}", exc_info=True)
+        return jsonify({"error": str(e), "type": type(e).__name__}), 500                
+       
