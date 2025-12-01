@@ -259,34 +259,3 @@ def score_resume_to_job():
         "denominator": total,
     }), 200
 
-@api_bp.get("/me")
-def get_me():
-    """Get current user profile with credits"""
-    from supabase import create_client
-    
-    try:
-        uid = request.headers.get("X-User-Id")
-        if not uid:
-            return jsonify({"error": "Unauthorized"}), 401
-        
-        SUPABASE_URL = os.getenv("SUPABASE_URL")
-        SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-        supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-        
-        profile_res = supabase.table("profiles").select("*").eq("user_id", uid).execute()
-        pdata_raw = profile_res.get("data") if isinstance(profile_res, dict) else getattr(profile_res, "data", None)
-        
-        if isinstance(pdata_raw, list):
-            profile = pdata_raw[0] if pdata_raw else {}
-        else:
-            profile = pdata_raw or {}
-        
-        return jsonify({
-            "id": uid,
-            "credits": profile.get("credits", 0),
-            "email": profile.get("email", "")
-        }), 200
-    
-    except Exception as e:
-        logger.error(f"get_me error: {e}")
-        return jsonify({"error": "Unauthorized"}), 401
