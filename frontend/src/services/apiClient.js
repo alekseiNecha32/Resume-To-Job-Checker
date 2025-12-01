@@ -135,3 +135,20 @@ export async function extractTextFromFileAPI(file) {
   const data = await res.json();
   return data.text ?? "";
 }
+
+
+export async function apiCall(endpoint, options = {}) {
+  const url = `${API_BASE}${endpoint}`;
+  console.log(`📡 Calling: ${url}`);
+  return fetch(url, options);
+}
+
+export async function apiCallWithAuth(endpoint, token, options = {}) {
+  return apiCall(endpoint, {
+    ...options,
+    headers: {
+      ...options.headers,
+      "Authorization": `Bearer ${token}`
+    }
+  });
+}
