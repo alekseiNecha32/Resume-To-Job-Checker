@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { supabase } from "../lib/supabaseClient";
-import { apiCallWithAuth } from "../services/apiClient";  // ✅ Import from apiClient
+import { apiCall } from "../services/apiClient";
 
 export default function AvatarUploader({ onDone }) {
   const [file, setFile] = useState(null);
