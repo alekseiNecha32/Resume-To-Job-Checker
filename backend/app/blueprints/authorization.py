@@ -182,20 +182,18 @@ def update_profile():
             "user_id": uid,
             "email": email,
             "credits": row.get("credits", 0),
-            "avatar_url": row.get("avatar_url", avatar_url)
+            "avatar_url": row.get("avatar_url", avatar_url),
         }
-        
-        print(f"✅ Avatar uploaded: {avatar_url}")
-        # Ensure body and content-type are set explicitly
         payload = json.dumps(response)
         resp = Response(response=payload, status=200, mimetype="application/json")
         resp.headers["Content-Type"] = "application/json; charset=utf-8"
         resp.headers["Content-Length"] = str(len(payload))
-        return resp
+        return resp  # ✅ IMPORTANT: return the response
 
     except Exception as e:
         logger.error(f"update_profile error: {e}", exc_info=True)
-        err = {"error": f"internal_error: {str(e)}"}
-        resp = make_response(jsonify(err), 500)
-        resp.headers["Content-Type"] = "application/json; charset=utf-8"
-        return resp
+        err_payload = json.dumps({"error": f"internal_error: {str(e)}"})
+        err_resp = Response(response=err_payload, status=500, mimetype="application/json")
+        err_resp.headers["Content-Type"] = "application/json; charset=utf-8"
+        err_resp.headers["Content-Length"] = str(len(err_payload))
+        return err_resp
