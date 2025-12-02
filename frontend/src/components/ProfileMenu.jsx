@@ -28,7 +28,7 @@ export default function ProfileMenu({ me, onClose, onLogout, onBuyCredits }) {
       if (!token) throw new Error("Not authenticated");
       const form = new FormData();
       form.append("avatar", avatarFile);
-      const resp = await fetch("/api/profile", {
+      const resp = await fetch( `${import.meta.env.VITE_API_URL}/profile`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
         body: form
