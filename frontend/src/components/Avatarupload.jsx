@@ -15,22 +15,32 @@ export default function AvatarUploader({ onDone }) {
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData?.session?.access_token;
       if (!token) throw new Error("Not authenticated");
-      
+
       const form = new FormData();
       form.append("avatar", file);
-      
+
       // ✅ Use apiCall directly (don't use apiCallWithAuth which adds JSON header)
       const resp = await apiCall("/profile", {
         method: "POST",
         headers: { "Authorization": `Bearer ${token}` },  // ✅ Add auth manually
         body: form  // ✅ FormData - no Content-Type header needed
       });
-      
-      const uploadData = await resp.json();
-      if (!resp.ok) throw new Error(uploadData.error || "Upload failed");
-      
+
+
+      // Fallback if proxy strips body
+      const text = await resp.text();
+      let uploadData;
+      if (text && text.trim().length) {
+        try { uploadData = JSON.parse(text); } catch { uploadData = { raw: text }; }
+      } else {
+        uploadData = { ok: resp.ok, status: resp.status };
+      }
+      if (!resp.ok) throw new Error(uploadData?.error || `Upload failed (${resp.status})`);
+      onDone?.(uploadData);
+
       console.log("✅ Avatar uploaded:", uploadData);
       setMsg("Updated");
+
       onDone?.(uploadData);
     } catch (e) {
       console.error("❌ Upload error:", e);
@@ -42,16 +52,16 @@ export default function AvatarUploader({ onDone }) {
 
   return (
     <div>
-      <input 
-        type="file" 
-        accept="image/*" 
-        onChange={e => setFile(e.target.files?.[0] || null)} 
+      <input
+        type="file"
+        accept="image/*"
+        onChange={e => setFile(e.target.files?.[0] || null)}
       />
       {file && (
-        <img 
-          src={URL.createObjectURL(file)} 
-          alt="preview" 
-          style={{ width: 64, height: 64, borderRadius: "50%", objectFit: "cover", marginTop: 8 }} 
+        <img
+          src={URL.createObjectURL(file)}
+          alt="preview"
+          style={{ width: 64, height: 64, borderRadius: "50%", objectFit: "cover", marginTop: 8 }}
         />
       )}
       <button disabled={!file || uploading} onClick={handleUpload}>

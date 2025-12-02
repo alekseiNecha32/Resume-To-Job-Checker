@@ -1,5 +1,6 @@
 import os, time, mimetypes, traceback
-from flask import Blueprint, request, jsonify, make_response
+from flask import Blueprint, request, jsonify, make_response, Response
+import json
 from supabase import create_client
 from dotenv import load_dotenv
 import logging
@@ -186,8 +187,10 @@ def update_profile():
         
         print(f"✅ Avatar uploaded: {avatar_url}")
         # Ensure body and content-type are set explicitly
-        resp = make_response(jsonify(response), 200)
+        payload = json.dumps(response)
+        resp = Response(response=payload, status=200, mimetype="application/json")
         resp.headers["Content-Type"] = "application/json; charset=utf-8"
+        resp.headers["Content-Length"] = str(len(payload))
         return resp
 
     except Exception as e:
