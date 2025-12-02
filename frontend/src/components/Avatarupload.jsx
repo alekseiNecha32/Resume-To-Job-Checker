@@ -12,19 +12,21 @@ export default function AvatarUploader({ onDone }) {
     setUploading(true);
     setMsg(null);
     try {
-      const { data: sessionData } = await supabase.auth.getSession();  // ✅ Rename to sessionData
+      const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData?.session?.access_token;
       if (!token) throw new Error("Not authenticated");
       
       const form = new FormData();
       form.append("avatar", file);
       
-      const resp = await apiCallWithAuth("/profile", token, {
+      // ✅ Use apiCall directly (don't use apiCallWithAuth which adds JSON header)
+      const resp = await apiCall("/profile", {
         method: "POST",
-        body: form
+        headers: { "Authorization": `Bearer ${token}` },  // ✅ Add auth manually
+        body: form  // ✅ FormData - no Content-Type header needed
       });
       
-      const uploadData = await resp.json();  // ✅ Rename to uploadData
+      const uploadData = await resp.json();
       if (!resp.ok) throw new Error(uploadData.error || "Upload failed");
       
       console.log("✅ Avatar uploaded:", uploadData);
