@@ -69,8 +69,9 @@ export async function smartAnalyze({ resumeText, jobText, jobTitle }) {
 
 
 export async function getMe() {
-  const headers = await authHeaders();
-  const r = await fetch(`${API_BASE}/me`, { method: "GET", headers });
+  const { data: { session } } = await supabase.auth.getSession();
+  const headers = session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
+  const r = await fetch(`${API_BASE}/me`, { headers });
   const ct = r.headers.get("content-type") || "";
   const data = ct.includes("application/json") ? await r.json() : {};
   if (!r.ok) throw new Error(data?.error || `me failed (${r.status})`);

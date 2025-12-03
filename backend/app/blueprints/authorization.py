@@ -14,7 +14,11 @@ def _get_supabase():
     if not url or not key:
         return None
     return create_client(url, key)
-
+def _bearer_token():
+    auth = request.headers.get("Authorization", "")
+    if auth.startswith("Bearer "):
+        return auth[len("Bearer "):]
+    return None
 def _resolve_user(supabase, token):
     user = None
     try:
@@ -67,6 +71,8 @@ def create_profile():
 
 @auth_bp.get("/me")
 def me():
+    token = _bearer_token()
+
     """Return current user id, email, credits, avatar_url."""
     try:
         supabase = _get_supabase()
