@@ -1,7 +1,8 @@
 
 import { supabase } from "../lib/supabaseClient";
 
-export const API_BASE = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:5000/api";
+const DEFAULT_BACKEND = "https://resume-tojob.onrender.com/api";
+export const API_BASE = (import.meta.env.VITE_API_URL?.startsWith("http") ? import.meta.env.VITE_API_URL : DEFAULT_BACKEND);
 
 
 export async function authHeaders() {
@@ -69,9 +70,9 @@ export async function smartAnalyze({ resumeText, jobText, jobTitle }) {
 
 
 export async function getMe() {
-  const { data: { session } } = await supabase.auth.getSession();
-  const headers = session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
+  const headers = await authHeaders();
   const r = await fetch(`${API_BASE}/me`, { headers });
+  if (r.status === 404) return null; // tolerate missing during deploy
   const ct = r.headers.get("content-type") || "";
   const data = ct.includes("application/json") ? await r.json() : {};
   if (!r.ok) throw new Error(data?.error || `me failed (${r.status})`);

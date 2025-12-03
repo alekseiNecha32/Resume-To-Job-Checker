@@ -5,7 +5,6 @@ import { supabase } from "../lib/supabaseClient";
 const MeContext = createContext(null);
 
 export function MeProvider({ children }) {
-  // Initialize from cache synchronously to avoid any logged-off flicker after redirects
   const [me, setMe] = useState(() => {
     try {
       const raw = localStorage.getItem("cachedProfile");
@@ -14,87 +13,69 @@ export function MeProvider({ children }) {
       return null;
     }
   });
-  const [loading, setLoading] = useState(() => (localStorage.getItem("cachedProfile") ? false : true));
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     let mounted = true;
+    let inFlight = false;
 
-    async function load() {
+    async function loadMeOnce() {
+      if (inFlight) return;
+      inFlight = true;
+      setLoading(true);
       try {
-        const u = await getMe();
-        if (mounted && u) {
-          setMe(u);
-          try { localStorage.setItem("cachedProfile", JSON.stringify(u)); } catch { }
-          return;
-        }
-        const { data } = await supabase.auth.getUser();
-        const user = data?.user;
-        if (mounted && user) {
-          setMe(prev => ({
-            user_id: user.id,
-            email: user.email,
-            full_name: user.user_metadata?.full_name || prev?.full_name || null,
-            credits: prev?.credits ?? 0,
-          }));
-        } else {
-          // No user found - clear state
-          if (mounted) {
-            setMe(null);
-            try { localStorage.removeItem("cachedProfile"); } catch { }
-          }
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) return; // no session yet; skip
+        const profile = await getMe();      // uses API_BASE under the hood
+        if (mounted && profile) {
+          setMe(profile);
+          try { localStorage.setItem("cachedProfile", JSON.stringify(profile)); } catch {}
         }
       } catch {
-
+        // tolerate 401/404 during cold start
       } finally {
+        inFlight = false;
         if (mounted) setLoading(false);
       }
     }
 
-    load();
+    // Initial attempt (only runs if a token exists)
+    loadMeOnce();
 
-  const { data: sub } = supabase.auth.onAuthStateChange((event) => {
-  console.log("auth event ->", event);  // helpful for debugging
+    const { data: sub } = supabase.auth.onAuthStateChange(async (event) => {
+      // Only fetch after we know the user is signed in or updated
+      if (event === "SIGNED_IN" || event === "USER_UPDATED") {
+        await loadMeOnce();
+      }
+      if (event === "SIGNED_OUT") {
+        setMe(null);
+        try { localStorage.removeItem("cachedProfile"); } catch {}
+      }
+      // Skip INITIAL_SESSION to avoid duplicate fetches
+    });
 
-  if (event === "SIGNED_OUT") {
-    if (mounted) {
-      setMe(null);
-      try { localStorage.removeItem("cachedProfile"); } catch {}
-    }
-    return;
-  }
-
-  // Only reload profile on these events
-  if (
-    event === "SIGNED_IN" ||
-    event === "INITIAL_SESSION" ||
-    event === "USER_UPDATED"
-  ) {
-    load();  // will call /api/me once for each of these transitions
-  }
-});
-
-    const onProfile = (e) => {
+    // Listen for manual profile updates (e.g., after avatar upload)
+    const onProfileUpdated = (e) => {
       if (e?.detail) {
         setMe(e.detail);
-        try { localStorage.setItem("cachedProfile", JSON.stringify(e.detail)); } catch { }
+        try { localStorage.setItem("cachedProfile", JSON.stringify(e.detail)); } catch {}
       } else {
-        load();
+        loadMeOnce();
       }
     };
-    window.addEventListener("profile_updated", onProfile);
+    window.addEventListener("profile_updated", onProfileUpdated);
 
     return () => {
       mounted = false;
-      window.removeEventListener("profile_updated", onProfile);
+      window.removeEventListener("profile_updated", onProfileUpdated);
       sub?.subscription?.unsubscribe?.();
     };
   }, []);
 
-  // Persist latest profile for instant rehydration next mount
   useEffect(() => {
     try {
       if (me) localStorage.setItem("cachedProfile", JSON.stringify(me));
-    } catch { }
+    } catch {}
   }, [me]);
 
   return (
