@@ -21,7 +21,7 @@ def create_app():
             "origins": [
                 "http://localhost:5173",
                 "http://127.0.0.1:5173",
-                # "https://resume-to-job-checker-5.onrender.com",  # FRONTEND URL
+                "https://resume-to-job-checker-5.onrender.com",  # FRONTEND URL
             ],
             "supports_credentials": True,
             "methods": ["GET", "POST", "OPTIONS"],
