@@ -6,18 +6,10 @@ export const API_BASE = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:5000/a
 
 export async function authHeaders() {
   const { data: { session } } = await supabase.auth.getSession();
-  const headers = { "Content-Type": "application/json" };
+  const headers = {};
   if (session?.access_token) {
     headers["Authorization"] = `Bearer ${session.access_token}`;
-    return headers;
   }
-  const devUid = import.meta.env.VITE_DEV_USER_ID;
-  if (devUid) {
-    headers["X-User-Id"] = devUid;
-    return headers;
-  }
-
-  console.warn("DEBUG no session found; calling API without auth headers");
   return headers;
 }
 
@@ -77,26 +69,30 @@ export async function smartAnalyze({ resumeText, jobText, jobTitle }) {
 
 
 export async function getMe() {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session?.access_token && !import.meta.env.VITE_DEV_USER_ID) {
-    return null;
-  }
-
   const headers = await authHeaders();
   const r = await fetch(`${API_BASE}/me`, { method: "GET", headers });
-  if (!r.ok) return null;
-  return await r.json().catch(() => null);
+  const ct = r.headers.get("content-type") || "";
+  const data = ct.includes("application/json") ? await r.json() : {};
+  if (!r.ok) throw new Error(data?.error || `me failed (${r.status})`);
+  return data;
 }
 
-export async function updateProfile(fields) {
+
+export async function updateProfile({ avatarFile } = {}) {
   const headers = await authHeaders();
+  const fd = new FormData();
+  if (avatarFile) fd.append("avatar", avatarFile);
+
   const res = await fetch(`${API_BASE}/profile`, {
     method: "POST",
-    headers,
-    body: JSON.stringify(fields || {})
+    headers, // no Content-Type; let browser set multipart/form-data
+    body: fd
   });
-  const data = await res.json().catch(() => null);
-  if (!res.ok) throw new Error(data?.error || data?.message || `Update failed (${res.status})`);
+
+  const text = await res.text();
+  let data = {};
+  try { data = text ? JSON.parse(text) : {}; } catch { data = { raw: text }; }
+  if (!res.ok) throw new Error(data?.error || `Update failed (${res.status})`);
   return data;
 }
 
