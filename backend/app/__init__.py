@@ -8,11 +8,17 @@ from app.blueprints.authorization import auth_bp
 from app.blueprints.api import api_bp
 from app.blueprints.smart import smart_bp
 from .blueprints.stripe import stripe_bp
+from openai import OpenAI
 
 def create_app():
     load_dotenv()
     app = Flask(__name__)
     app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev")
+
+    openai_key = os.getenv("OPENAI_API_KEY")
+    app.config["OPENAI_CLIENT"] = OpenAI(api_key=openai_key) if openai_key else None
+    app.logger.info("OpenAI configured: %s", bool(openai_key))
+
 
     CORS(
     app,

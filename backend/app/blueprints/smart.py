@@ -1,9 +1,10 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, current_app, request, jsonify
 from app.services.smart_resume_advisor import smart_predict_resume_improvements
 from supabase import create_client
 import os
 from dotenv import load_dotenv
 import logging
+from openai import OpenAI
 
 smart_bp = Blueprint("smart", __name__, url_prefix="/api/smart")
 logger = logging.getLogger(__name__)
@@ -71,7 +72,36 @@ def analyze():
             job_text=d.get("job_text", ""),
             job_title=d.get("job_title", "")
         )
+       
+        suggestions_text = None
+        client = current_app.config.get("OPENAI_CLIENT")
         
+        if client and res:
+                    prompt = f"""
+        You are an ATS expert. Produce concise, actionable “Personal Suggestions” focused ONLY on hard technical skills,
+        tools, frameworks, and specific deliverables that strengthen the resume for this job. Ignore soft skills like
+        communication, leadership, cross time zone collaboration, culture fit.
+
+        Return 4–6 short bullet points.
+
+        Job Title: {d.get("job_title","")}
+
+        Missing/underrepresented hard skills:
+        {", ".join(res.missing_skills or [])}
+
+        Resume (excerpt):
+        {(d.get("resume_text","") or "")[:2000]}
+
+        Job description (excerpt):
+        {(d.get("job_text","") or "")[:2000]}
+        """.strip()
+                    try:
+                        completion = client.responses.create(model="gpt-4.1-mini", input=prompt)
+                        suggestions_text = completion.output_text
+                    except Exception as e:
+                        logger.warning(f"OpenAI suggestions failed: {e}")
+                        suggestions_text = None
+
         if res is None:
             return jsonify({"error": "Analysis failed - returned None"}), 500
 
@@ -80,10 +110,9 @@ def analyze():
             supabase.table("profiles").update({"credits": credits - 1}).eq("user_id", uid).execute()
         except Exception as e:
             logger.error(f"Failed to deduct credits: {e}")
-            # Don't fail - user already got analysis
             pass
 
-        # Save to DB
+        # Save to DB (include personal_suggestions)
         try:
             supabase.table("analyses").insert({
                 "user_id": uid,
@@ -98,14 +127,14 @@ def analyze():
                     "section_suggestions": res.section_suggestions,
                     "ready_bullets": res.ready_bullets,
                     "rewrite_hints": res.rewrite_hints,
+                    "personal_suggestions": suggestions_text,  # NEW
                 },
                 "resume_excerpt": d.get("resume_text", "")[:300]
             }).execute()
         except Exception as e:
             logger.error(f"Failed to save analysis: {e}")
-            # Don't fail - analysis is done
 
-        logger.info(f"smart_analyze uid={uid} fit={res.fit_estimate} missing={len(res.missing_skills)}")
+        logger.info(f"smart_analyze uid={uid} fit={res.fit_estimate} missing={len(res.missing_skills or [])}")
 
         return jsonify({
             "fit_estimate": res.fit_estimate,
@@ -116,10 +145,66 @@ def analyze():
             "section_suggestions": res.section_suggestions,
             "ready_bullets": res.ready_bullets,
             "rewrite_hints": res.rewrite_hints,
-            "remaining_credits": credits - 1
+            "personal_suggestions": suggestions_text,  # NEW
+            "remaining_credits": credits - 1,
+            "model_source": {
+                "scoring": "MiniLM",
+                "suggestions": "gpt-4.1-mini" if suggestions_text else None
+            }
         }), 200
 
     except Exception as e:
         logger.error(f"smart_analyze error: {e}", exc_info=True)
-        return jsonify({"error": str(e), "type": type(e).__name__}), 500                
+        return jsonify({"error": str(e), "type": type(e).__name__}), 500     
+                    
+    #     if res is None:
+    #         return jsonify({"error": "Analysis failed - returned None"}), 500
+
+    #     # Deduct credits
+    #     try:
+    #         supabase.table("profiles").update({"credits": credits - 1}).eq("user_id", uid).execute()
+    #     except Exception as e:
+    #         logger.error(f"Failed to deduct credits: {e}")
+    #         # Don't fail - user already got analysis
+    #         pass
+
+    #     # Save to DB
+    #     try:
+    #         supabase.table("analyses").insert({
+    #             "user_id": uid,
+    #             "job_title": d.get("job_title", ""),
+    #             "fit_estimate": res.fit_estimate,
+    #             "payload": {
+    #                 "fit_estimate": res.fit_estimate,
+    #                 "similarity_resume_job": res.sim_resume_jd,
+    #                 "present_skills": res.present_skills,
+    #                 "missing_skills": res.missing_skills,
+    #                 "critical_gaps": res.critical_gaps,
+    #                 "section_suggestions": res.section_suggestions,
+    #                 "ready_bullets": res.ready_bullets,
+    #                 "rewrite_hints": res.rewrite_hints,
+    #             },
+    #             "resume_excerpt": d.get("resume_text", "")[:300]
+    #         }).execute()
+    #     except Exception as e:
+    #         logger.error(f"Failed to save analysis: {e}")
+    #         # Don't fail - analysis is done
+
+    #     logger.info(f"smart_analyze uid={uid} fit={res.fit_estimate} missing={len(res.missing_skills)}")
+
+    #     return jsonify({
+    #         "fit_estimate": res.fit_estimate,
+    #         "similarity_resume_job": res.sim_resume_jd,
+    #         "present_skills": res.present_skills,
+    #         "missing_skills": res.missing_skills,
+    #         "critical_gaps": res.critical_gaps,
+    #         "section_suggestions": res.section_suggestions,
+    #         "ready_bullets": res.ready_bullets,
+    #         "rewrite_hints": res.rewrite_hints,
+    #         "remaining_credits": credits - 1
+    #     }), 200
+
+    # except Exception as e:
+    #     logger.error(f"smart_analyze error: {e}", exc_info=True)
+    #     return jsonify({"error": str(e), "type": type(e).__name__}), 500                
        

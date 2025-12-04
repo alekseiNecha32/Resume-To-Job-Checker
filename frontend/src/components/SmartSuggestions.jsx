@@ -73,7 +73,32 @@ export default function SmartSuggestions({ resumeText, jobText, jobTitle, data: 
       setLoading(false);
     }
   };
+function parseSuggestions(text = "") {
+  try {
+    const lines = String(text)
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter(Boolean);
 
+    const items = [];
+    let buffer = "";
+
+    for (const l of lines) {
+      // New bullet starts with -, •, or numbered lists "1)"/"1."
+      if (/^(-|•|\d+[.)])\s+/.test(l)) {
+        if (buffer) items.push(buffer.trim());
+        buffer = l.replace(/^(-|•|\d+[.)])\s+/, "");
+      } else {
+        buffer = buffer ? `${buffer} ${l}` : l;
+      }
+    }
+    if (buffer) items.push(buffer.trim());
+
+    return items.length ? items : [String(text || "").trim()];
+  } catch {
+    return [String(text || "").trim()];
+  }
+}
   const onBuyClick = async () => {
     try {
       const { url } = await createCheckoutSession();
@@ -225,9 +250,68 @@ export default function SmartSuggestions({ resumeText, jobText, jobTitle, data: 
                   </div>
                 </div>
 
-                {/* Personal suggestions */}
+            {/* Personal suggestions */}
                 <div className="md:col-span-2 sa-card">
-                  <div className="sa-card-title">Personal Suggestions</div>
+                  <div className="sa-card-title flex items-center justify-between">
+                    <span>Personal Suggestions</span>
+                    {data.personal_suggestions && (
+                      <button
+                        className="text-xs px-2 py-1 rounded bg-indigo-600 text-white hover:opacity-90"
+                        onClick={() => {
+                          const items = parseSuggestions(data.personal_suggestions);
+                          const txt = Array.isArray(items) ? items.join("\n") : String(items || "");
+                          navigator.clipboard.writeText(txt).catch(() => {});
+                        }}
+                        aria-label="Copy suggestions"
+                      >
+                        Copy
+                      </button>
+                    )}
+                  </div>
+
+                  {data.personal_suggestions ? (
+                    <ul className="mt-2 space-y-2">
+                      {parseSuggestions(data.personal_suggestions).map((item, idx) => (
+                        <li
+                          key={`psg-${idx}`}
+                          className="flex items-start gap-2 rounded-lg border bg-white/70 px-3 py-2"
+                        >
+                          <span
+                            className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-white text-xs mt-0.5"
+                            aria-hidden
+                          >
+                            •
+                          </span>
+                          <span className="text-sm leading-relaxed">{item}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : data.personal_suggestions_error ? (
+                    <div className="text-xs p-2 rounded bg-amber-100 text-amber-800">
+                      {data.personal_suggestions_error}
+                    </div>
+                  ) : (
+                    <div className="text-xs text-muted-foreground">
+                      Suggestions will appear here after Smart Analysis.
+                    </div>
+                  )}
+                </div>
+                  
+
+
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+   {/* Section suggestions (MiniLM) */}
+                {/* <div className="md:col-span-2 sa-card">
+                  <div className="sa-card-title">Section Suggestions</div>
                   <ul className="sa-suggest-list">
                     {Object.entries(data.section_suggestions || {}).flatMap(([sec, arr]) =>
                       (arr || []).map((s, i) => {
@@ -242,14 +326,4 @@ export default function SmartSuggestions({ resumeText, jobText, jobTitle, data: 
                       })
                     )}
                   </ul>
-                </div>
-
-
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
+                </div> */}
