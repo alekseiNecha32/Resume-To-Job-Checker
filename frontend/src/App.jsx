@@ -4,7 +4,7 @@ import { BrowserRouter as Router, Route, Routes } from "react-router-dom";
 import NavBar from "./components/Navbar.jsx";
 import PaySuccess from "./components/PaySuccess";
 import { MeProvider } from "./context/MeContext.jsx";
-
+import PayCancel from "./components/PayCancel.jsx";
 
 export default function App() {
    return (
@@ -15,6 +15,8 @@ export default function App() {
           <Routes>
             <Route path="/" element={<Analyze />} />
             <Route path="/pay/success" element={<PaySuccess />} />
+            <Route path="/pay/cancel" element={<PayCancel />} />
+
           </Routes>
         </div>
       </Router>
