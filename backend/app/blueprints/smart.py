@@ -11,8 +11,10 @@ logger = logging.getLogger(__name__)
 def get_user_id():
     return request.headers.get("X-User-Id")
 
-@smart_bp.post("/analyze")
+@smart_bp.route("/analyze", methods=["POST", "OPTIONS"])
 def analyze():
+    if request.method == "OPTIONS":
+        return ("", 204)
     try:
         load_dotenv()
         SUPABASE_URL = os.getenv("SUPABASE_URL")
