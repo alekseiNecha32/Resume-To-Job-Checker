@@ -11,3 +11,4 @@ supabase
 gunicorn
 keybert==0.7.0
 stripe
+openai
