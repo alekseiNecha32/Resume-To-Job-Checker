@@ -4,7 +4,7 @@ from supabase import create_client
 import os
 from dotenv import load_dotenv
 import logging
-from openai import OpenAI
+
 
 smart_bp = Blueprint("smart", __name__, url_prefix="/api/smart")
 logger = logging.getLogger(__name__)

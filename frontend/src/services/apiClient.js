@@ -113,12 +113,15 @@ export async function createCheckoutSession({ packId, credits } = {}) {
   const headers = await authHeaders();
   const res = await fetch(`${API_BASE}/payments/checkout`, {
     method: "POST",
-    headers,
+    headers: {
+      ...headers,
+      "Content-Type": "application/json",
+    },
     body: JSON.stringify({ packId, credits }),
   });
   const text = await res.text();
   let json = {};
-  try { json = text ? JSON.parse(text) : {}; } catch (e) { throw new Error("Invalid JSON from checkout"); }
+  try { json = text ? JSON.parse(text) : {}; } catch { throw new Error("Invalid JSON from checkout"); }
   if (!res.ok) throw new Error(json?.message || json?.error || `Checkout failed (${res.status})`);
   return json;
 }
