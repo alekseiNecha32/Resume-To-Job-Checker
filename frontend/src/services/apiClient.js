@@ -1,8 +1,14 @@
 
 import { supabase } from "../lib/supabaseClient";
 
-const DEFAULT_BACKEND = "https://resume-tojob.onrender.com/api";
-export const API_BASE = (import.meta.env.VITE_API_URL?.startsWith("http") ? import.meta.env.VITE_API_URL : DEFAULT_BACKEND);
+const DEV = import.meta.env.VITE_API_URL_Dev;
+const PROD = import.meta.env.VITE_API_URL_Prod;
+export const API_BASE =
+  import.meta.env.MODE === "development"
+    ? (DEV || "http://127.0.0.1:5000/api")
+    : (PROD || "https://resume-tojob.onrender.com/api");
+
+if (typeof window !== "undefined") window.API_BASE = API_BASE;
 
 
 export async function authHeaders() {
@@ -44,7 +50,12 @@ export async function smartAnalyze({ resumeText, jobText, jobTitle }) {
   const headers = await authHeaders();
   const res = await fetch(`${API_BASE}/smart/analyze`, {
     method: "POST",
-    headers,
+        headers: {
+      ...headers,
+      "Content-Type": "application/json",   // <-- add this
+      "Accept": "application/json"
+    },
+  
     body: JSON.stringify({ resume_text: resumeText, job_text: jobText, job_title: jobTitle })
   });
 

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useState, useRef } from "react";
 import { getMe } from "../services/apiClient.js";
 import { supabase } from "../lib/supabaseClient";
 
@@ -13,70 +13,81 @@ export function MeProvider({ children }) {
       return null;
     }
   });
-  const [loading, setLoading] = useState(false);
+// Start true to avoid flicker on first paint
+  const [loading, setLoading] = useState(true);
+  const inFlight = useRef(false);
 
-  useEffect(() => {
-    let mounted = true;
-    let inFlight = false;
-
-    async function loadMeOnce() {
-      if (inFlight) return;
-      inFlight = true;
-      setLoading(true);
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session?.access_token) return; // no session yet; skip
-        const profile = await getMe();      // uses API_BASE under the hood
-        if (mounted && profile) {
-          setMe(profile);
-          try { localStorage.setItem("cachedProfile", JSON.stringify(profile)); } catch {}
-        }
-      } catch {
-        // tolerate 401/404 during cold start
-      } finally {
-        inFlight = false;
-        if (mounted) setLoading(false);
-      }
+async function revalidate() {
+  if (inFlight.current) return;
+  inFlight.current = true;
+  setLoading(true); // start in loading state
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) return; // keep cached me, do not clear
+    const profile = await getMe();
+    if (profile) {
+      setMe(profile);
+      try { localStorage.setItem("cachedProfile", JSON.stringify(profile)); } catch {}
     }
+  } catch {
+    // keep stale me on error
+  } finally {
+    inFlight.current = false;
+    setLoading(false);
+  }
+}
 
-    // Initial attempt (only runs if a token exists)
-    loadMeOnce();
 
-    const { data: sub } = supabase.auth.onAuthStateChange(async (event) => {
-      // Only fetch after we know the user is signed in or updated
-      if (event === "SIGNED_IN" || event === "USER_UPDATED") {
-        await loadMeOnce();
-      }
-      if (event === "SIGNED_OUT") {
-        setMe(null);
-        try { localStorage.removeItem("cachedProfile"); } catch {}
-      }
-      // Skip INITIAL_SESSION to avoid duplicate fetches
-    });
+useEffect(() => {
+  // show cache immediately, then refresh
+  setLoading(true);
+  revalidate();
 
-    // Listen for manual profile updates (e.g., after avatar upload)
-    const onProfileUpdated = (e) => {
-      if (e?.detail) {
-        setMe(e.detail);
-        try { localStorage.setItem("cachedProfile", JSON.stringify(e.detail)); } catch {}
-      } else {
-        loadMeOnce();
-      }
-    };
-    window.addEventListener("profile_updated", onProfileUpdated);
+  const { data: sub } = supabase.auth.onAuthStateChange(async (event) => {
+    if (event === "SIGNED_OUT") {
+      setMe(null);
+      try { localStorage.removeItem("cachedProfile"); } catch {}
+      return;
+    }
+    if (event === "SIGNED_IN" || event === "USER_UPDATED" || event === "TOKEN_REFRESHED") {
+      setLoading(true);
+      revalidate();
+    }
+    // do not clear on INITIAL_SESSION
+  });
 
-    return () => {
-      mounted = false;
-      window.removeEventListener("profile_updated", onProfileUpdated);
-      sub?.subscription?.unsubscribe?.();
-    };
-  }, []);
+  const onFocus = () => {
+    setLoading(true);
+    revalidate();
+  };
+  const onVisible = () => {
+    if (document.visibilityState === "visible") {
+      setLoading(true);
+      revalidate();
+    }
+  };
+  window.addEventListener("focus", onFocus);
+  document.addEventListener("visibilitychange", onVisible);
 
-  useEffect(() => {
-    try {
-      if (me) localStorage.setItem("cachedProfile", JSON.stringify(me));
-    } catch {}
-  }, [me]);
+  const onProfileUpdated = (e) => {
+    const next = e?.detail;
+    if (next) {
+      setMe(next);
+      try { localStorage.setItem("cachedProfile", JSON.stringify(next)); } catch {}
+    } else {
+      setLoading(true);
+      revalidate();
+    }
+  };
+  window.addEventListener("profile_updated", onProfileUpdated);
+
+  return () => {
+    window.removeEventListener("focus", onFocus);
+    document.removeEventListener("visibilitychange", onVisible);
+    window.removeEventListener("profile_updated", onProfileUpdated);
+    sub?.subscription?.unsubscribe?.();
+  };
+}, []);
 
   return (
     <MeContext.Provider value={{ me, setMe, loading, hasProfile: !!me }}>

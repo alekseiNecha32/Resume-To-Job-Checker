@@ -7,6 +7,8 @@ import {
   smartAnalyze,
 } from "../services/apiClient.js";
 import { supabase } from "../lib/supabaseClient.js";
+import { useMe } from "../context/MeContext.jsx";
+
 import SmartSuggestions from "../components/SmartSuggestions";
 
 export default function Analyze() {
@@ -17,32 +19,32 @@ export default function Analyze() {
   const [parsing, setParsing] = useState(false);
   const [result, setResult] = useState(null);
   const [jobTitle, setJobTitle] = useState("");
-  const [me, setMe] = useState(null);
-  const [loadingMe, setLoadingMe] = useState(true);
+  const { me, setMe, loading: loadingMe } = useMe();   
+
   const [smartResult, setSmartResult] = useState(null);
   const [runningSmart, setRunningSmart] = useState(false);
 
-  useEffect(() => {
-    let mounted = true;
-    async function loadMe() {
-      try {
-        const u = await getMe();
-        if (mounted) setMe(u);
-      } catch {
-        if (mounted) setMe(null);
-      } finally {
-        if (mounted) setLoadingMe(false);
-      }
-    }
-    loadMe();
-    const { data: sub } = supabase.auth.onAuthStateChange(() => {
-      loadMe();
-    });
-    return () => {
-      mounted = false;
-      sub?.subscription?.unsubscribe?.();
-    };
-  }, []);
+  // useEffect(() => {
+  //   let mounted = true;
+  //   async function loadMe() {
+  //     try {
+  //       const u = await getMe();
+  //       if (mounted) setMe(u);
+  //     } catch {
+  //       if (mounted) setMe(null);
+  //     } finally {
+  //       if (mounted) setLoadingMe(false);
+  //     }
+  //   }
+  //   loadMe();
+  //   const { data: sub } = supabase.auth.onAuthStateChange(() => {
+  //     loadMe();
+  //   });
+  //   return () => {
+  //     mounted = false;
+  //     sub?.subscription?.unsubscribe?.();
+  //   };
+  // }, []);
 
   async function handleRunSmartAnalysis() {
     if (runningSmart) return;
@@ -50,6 +52,7 @@ export default function Analyze() {
       alert("Provide resume text and job description first.");
       return;
     }
+    if (loadingMe) return;     // wait until profile loads
     if (!me) {
       alert("Please log in to run Smart Analysis.");
       return;

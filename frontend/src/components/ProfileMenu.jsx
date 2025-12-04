@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { useMe } from "../context/MeContext.jsx";
+import { API_BASE } from "../services/apiClient.js";
 
 export default function ProfileMenu({ me, onClose, onLogout, onBuyCredits }) {
   const ref = useRef(null);
@@ -28,7 +29,7 @@ export default function ProfileMenu({ me, onClose, onLogout, onBuyCredits }) {
       if (!token) throw new Error("Not authenticated");
       const form = new FormData();
       form.append("avatar", avatarFile);
-      const resp = await fetch( `${import.meta.env.VITE_API_URL}/profile`, {
+      const resp = await fetch( `${API_BASE}/profile`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
         body: form

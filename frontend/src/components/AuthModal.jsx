@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { supabase } from "../lib/supabaseClient";
-import { API_BASE } from "../services/apiClient";
+import { API_BASE, authHeaders} from "../services/apiClient";
 import { useMe } from "../context/MeContext.jsx";
 
 export default function AuthModal({ onClose, onSuccess }) {
@@ -30,15 +30,15 @@ export default function AuthModal({ onClose, onSuccess }) {
         setMe({ email: session.user.email, avatar_url: null, credits: null });
         // Hydrate profile (create only if 404)
         try {
-          let resp = await fetch("/api/me", {
+          let resp = await fetch(`${API_BASE}/me`, {
             headers: { Authorization: `Bearer ${session.access_token}` }
           });
           if (resp.status === 404) {
-            await fetch("/api/auth/create_profile", {
+            await fetch(`${API_BASE}/auth/create_profile`, {
               method: "POST",
               headers: { Authorization: `Bearer ${session.access_token}` }
             }).catch(()=>{});
-            resp = await fetch("/api/me", {
+            resp = await fetch(`${API_BASE}/me`, {
               headers: { Authorization: `Bearer ${session.access_token}` }
             });
           }

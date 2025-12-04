@@ -5,6 +5,7 @@ import CreditsModal from "./CreditsModal";
 import { supabase } from "../lib/supabaseClient";
 import { useMe } from "../context/MeContext.jsx";
 
+import { API_BASE } from "../services/apiClient.js";
 
 function initials(email = "") {
   const [a = "", b = ""] = email.split("@")[0].split(/[.\-_]/);
@@ -16,6 +17,9 @@ export default function NavBar() {
   const [showAuth, setShowAuth] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showCreditsModal, setShowCreditsModal] = useState(false);
+
+  const cachedMe = (() => { try { return JSON.parse(localStorage.getItem("cachedProfile") || "null"); } catch { return null; } })();
+  const displayMe = me || cachedMe;
 
   useEffect(() => {
     let cancelled = false;
@@ -34,7 +38,7 @@ export default function NavBar() {
           await supabase.auth.exchangeCodeForSession(window.location.href);
         } else if (token_hash) {
           const tryTypes = [type, "signup", "magiclink", "recovery", "email"].filter(Boolean);
-          for (const t of tryTypes) { try { await supabase.auth.verifyOtp({ type: t, token_hash }); break; } catch {} }
+          for (const t of tryTypes) { try { await supabase.auth.verifyOtp({ type: t, token_hash }); break; } catch { } }
         } else if (access_token && refresh_token) {
           await supabase.auth.setSession({ access_token, refresh_token });
         }
@@ -46,7 +50,7 @@ export default function NavBar() {
       const session = (await supabase.auth.getSession()).data?.session;
       if (!session) return;
       try {
-        const resp = await fetch("/api/me", {
+        const resp = await fetch(`${API_BASE}/me`, {
           headers: { Authorization: `Bearer ${session.access_token}` }
         });
         if (resp.ok && !cancelled) setMe(await resp.json());
@@ -57,15 +61,15 @@ export default function NavBar() {
 
   async function hydrateProfile(accessToken) {
     try {
-      let resp = await fetch("/api/me", {
+      let resp = await fetch(`${API_BASE}/me`, {
         headers: { Authorization: `Bearer ${accessToken}` }
       });
       if (resp.status === 404) {
-        await fetch("/api/auth/create_profile", {
+        await fetch(`${API_BASE}/auth/create_profile`, {
           method: "POST",
           headers: { Authorization: `Bearer ${accessToken}` }
-        }).catch(()=>{});
-        resp = await fetch("/api/me", {
+        }).catch(() => { });
+        resp = await fetch(`${API_BASE}/me`, {
           headers: { Authorization: `Bearer ${accessToken}` }
         });
       }
@@ -73,46 +77,45 @@ export default function NavBar() {
     } catch (e) { console.warn("hydrateProfile failed:", e); }
   }
 
-  // SINGLE auth listener
   useEffect(() => {
-  const { data: sub } = supabase.auth.onAuthStateChange(
-    async (event, session) => {
-      if (!session) {
-        setMe(null);
-        return;
-      }
-
-      if (["INITIAL_SESSION","SIGNED_IN","USER_UPDATED","TOKEN_REFRESHED"]
-          .includes(event)) {
-
-        if (!me) {
-          setMe({
-            email: session.user.email,
-            avatar_url: null,
-            credits: null,
-          });
+    const { data: sub } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (event === "SIGNED_OUT") {
+          setMe(null);
+          return;
         }
 
-        hydrateProfile(session.access_token);
+        if (["INITIAL_SESSION", "SIGNED_IN", "USER_UPDATED", "TOKEN_REFRESHED"].includes(event)) {
+          if (!session) {
+            // skip clearing; let MeContext keep stale profile
+            return;
+          }
+          if (!me) {
+            setMe({
+              email: session.user.email,
+              avatar_url: null,
+              credits: null,
+            });
+          }
+          hydrateProfile(session.access_token);
+        }
       }
-    }
-  );
+    );
+    return () => sub.subscription.unsubscribe();
+  }, []);
 
-  return () => sub.subscription.unsubscribe();
-}, []);
-
- function onAuthSuccess() {
+  function onAuthSuccess() {
     setShowAuth(false); // auth listener will populate me
   }
 
   async function handleLogout() {
-    try { await supabase.auth.signOut(); } catch {}
+    try { await supabase.auth.signOut(); } catch { }
     setMe(null);
     setShowProfile(false);
   }
 
   function handleCloseCreditsModal() { setShowCreditsModal(false); }
- return (
+  return (
     <>
       <nav className="rtjc-nav">
         <div className="rtjc-brand">
@@ -123,12 +126,31 @@ export default function NavBar() {
           </div>
         </div>
         <div className="rtjc-actions">
-          {loading ? (
+          {loading && displayMe ? (
+            // Show cached profile while revalidating
+            <div className="rtjc-profile">
+              <button
+                className="rtjc-avatar-btn"
+                onClick={() => setShowProfile(s => !s)}
+                aria-haspopup="true"
+                aria-expanded={showProfile}
+              >
+                {displayMe.avatar_url
+                  ? <img src={displayMe.avatar_url} alt="avatar" style={{ width: 40, height: 40, borderRadius: "50%", objectFit: "cover" }} />
+                  : <div className="rtjc-avatar">{initials(displayMe.email)}</div>}
+              </button>
+              <div className="rtjc-meta">
+                <div className="rtjc-email">{displayMe.email}</div>
+                <div className="rtjc-credits">{(displayMe.credits ?? 0) + " credits"}</div>
+              </div>
+            </div>
+          ) : loading ? (
+            // Fallback skeleton if no cache
             <div className="rtjc-profile" aria-busy="true">
               <div className="rtjc-avatar rtjc-skeleton" />
               <div className="rtjc-meta">
-                <div className="rtjc-email rtjc-skeleton-line" style={{ width:140 }} />
-                <div className="rtjc-credits rtjc-skeleton-line" style={{ width:90, marginTop:4 }} />
+                <div className="rtjc-email rtjc-skeleton-line" style={{ width: 140 }} />
+                <div className="rtjc-credits rtjc-skeleton-line" style={{ width: 90, marginTop: 4 }} />
               </div>
             </div>
           ) : !me ? (
@@ -145,7 +167,7 @@ export default function NavBar() {
                 aria-expanded={showProfile}
               >
                 {me.avatar_url
-                  ? <img src={me.avatar_url} alt="avatar" style={{ width:40, height:40, borderRadius:"50%", objectFit:"cover" }} />
+                  ? <img src={me.avatar_url} alt="avatar" style={{ width: 40, height: 40, borderRadius: "50%", objectFit: "cover" }} />
                   : <div className="rtjc-avatar">{initials(me.email)}</div>}
               </button>
               <div className="rtjc-meta">
