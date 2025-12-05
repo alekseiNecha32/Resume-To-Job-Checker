@@ -19,50 +19,58 @@ export default function AuthModal({ onClose, onSuccess }) {
         email,
         password,
         options: {
-          data: fullName ? { full_name: fullName } : {}
-        }
+          // redirect to your app home after email confirmation
+          emailRedirectTo: window.location.origin,
+          data: fullName ? { full_name: fullName } : {},
+        },
       });
       if (error) throw error;
+      setMsg("We sent you a confirmation link. Please verify your email to log in.");
 
       const session = (await supabase.auth.getSession()).data?.session;
       if (session) {
-        // Optimistic UI
         setMe({ email: session.user.email, avatar_url: null, credits: null });
-        // Hydrate profile (create only if 404)
         try {
           let resp = await fetch(`${API_BASE}/me`, {
-            headers: { Authorization: `Bearer ${session.access_token}` }
+            headers: { Authorization: `Bearer ${session.access_token}` },
           });
           if (resp.status === 404) {
             await fetch(`${API_BASE}/auth/create_profile`, {
               method: "POST",
-              headers: { Authorization: `Bearer ${session.access_token}` }
-            }).catch(()=>{});
+              headers: { Authorization: `Bearer ${session.access_token}` },
+            }).catch(() => {});
             resp = await fetch(`${API_BASE}/me`, {
-              headers: { Authorization: `Bearer ${session.access_token}` }
+              headers: { Authorization: `Bearer ${session.access_token}` },
             });
           }
           if (resp.ok) setMe(await resp.json());
         } catch {}
-      } else {
-        setMsg("Check your email to confirm (email confirmations enabled).");
       }
 
       onSuccess?.();
     } catch (e) {
-      setMsg(e.message || String(e));
+      setMsg(e.message || "Sign up failed");
     } finally {
       setLoading(false);
     }
   }
-  async function handleLogin() {
-    setLoading(true); setMsg(null);
+async function handleLogin(e) {
+    e.preventDefault();
+    setMsg(null);
+    setLoading(true);
     try {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
+      const user = data?.user;
+      // Gate login until email confirmed
+      if (user && !user.email_confirmed_at) {
+        setMsg("Please confirm your email from the link we sent before logging in.");
+        await supabase.auth.signOut();
+        return;
+      }
       onSuccess?.();
     } catch (e) {
-      setMsg(e.message || String(e));
+      setMsg(e.message || "Login failed");
     } finally {
       setLoading(false);
     }

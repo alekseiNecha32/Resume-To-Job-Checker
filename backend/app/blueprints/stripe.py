@@ -112,8 +112,8 @@ def checkout():
                 }
             ],
             metadata={"user_id": user_id, "pack_id": pack_id or "custom", "credits": str(credits)},
-            success_url=f"{origin}/pay/success?session_id={{CHECKOUT_SESSION_ID}}",
-            cancel_url=f"{origin}/pay/cancel",
+            success_url=f"{origin}/?status=success&session_id={{CHECKOUT_SESSION_ID}}",
+            cancel_url=f"{origin}/?status=cancelled",
         )
         current_app.logger.info("created stripe session id=%s url=%s", session.get("id"), session.get("url"))
         return jsonify({"url": session.get("url")}), 200
