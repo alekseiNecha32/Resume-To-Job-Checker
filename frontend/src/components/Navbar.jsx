@@ -4,6 +4,8 @@ import ProfileMenu from "./ProfileMenu";
 import CreditsModal from "./CreditsModal";
 import { supabase } from "../lib/supabaseClient";
 import { useMe } from "../context/MeContext.jsx";
+import { Link } from "react-router-dom"; // added
+import "../styles/resume.css";
 
 import { API_BASE } from "../services/apiClient.js";
 
@@ -125,6 +127,12 @@ export default function NavBar() {
             <div className="rtjc-sub">Optimize your resume for ATS</div>
           </div>
         </div>
+        <div className="rtjc-nav-links">
+              
+<Link to="/" className="rtjc-nav-btn">Analyze Resume</Link>
+<Link to="/constructor" className="rtjc-nav-btn">Resume Constructor</Link>
+            </div>
+
         <div className="rtjc-actions">
           {loading && displayMe ? (
             // Show cached profile while revalidating
@@ -175,6 +183,7 @@ export default function NavBar() {
                 <div className="rtjc-credits">{(me.credits ?? 0) + " credits"}</div>
               </div>
             </div>
+              
           )}
         </div>
       </nav>

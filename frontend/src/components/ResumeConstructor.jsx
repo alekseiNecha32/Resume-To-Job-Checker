@@ -100,6 +100,7 @@ export default function ResumeConstructor() {
     const fileInputRef = useRef(null);                   // NEW
     const [downloading, setDownloading] = useState(false); // ⭐ YOU MUST ADD THIS
     const { me, setMe } = useMe();
+    const [highlightedIds, setHighlightedIds] = useState([]); // NEW
 
     const normalizeExtractedText = (text) => {
         return text
@@ -173,12 +174,14 @@ export default function ResumeConstructor() {
         setResume((prev) => {
             if (!prev) return prev;
             const updated = { ...prev, sections: prev.sections.map((s) => ({ ...s, items: [...s.items] })) };
+            let newId = null;
 
             if (suggestion.type === "add_bullet") {
                 const idx = updated.sections.findIndex((s) => s.id === suggestion.targetSectionId);
                 if (idx === -1) return prev;
+                newId = `item-${Date.now()}`;
                 updated.sections[idx].items.push({
-                    id: `item-${Date.now()}`,
+                    id: newId,
                     type: "bullet",
                     text: suggestion.suggestedText,
                 });
@@ -188,7 +191,9 @@ export default function ResumeConstructor() {
                 updated.sections = updated.sections.map((section) => ({
                     ...section,
                     items: section.items.map((it) =>
-                        it.id === suggestion.targetItemId ? { ...it, text: suggestion.suggestedText } : it
+                        it.id === suggestion.targetItemId
+                            ? ((newId = it.id), { ...it, text: suggestion.suggestedText })
+                            : it
                     ),
                 }));
             }
@@ -202,12 +207,22 @@ export default function ResumeConstructor() {
                     ];
                     idx = updated.sections.length - 1;
                 }
+                newId = `proj-${Date.now()}`;
                 updated.sections[idx].items.push({
-                    id: `proj-${Date.now()}`,
+                    id: newId,
                     type: "bullet",
                     text: suggestion.suggestedText,
                 });
             }
+
+            // highlight the affected item briefly
+            if (newId) {
+                setHighlightedIds((prevIds) => [...prevIds.filter((id) => id !== newId), newId]);
+                setTimeout(() => {
+                    setHighlightedIds((prevIds) => prevIds.filter((id) => id !== newId));
+                }, 5000);
+            }
+
             return updated;
         });
         setSuggestions((prev) => prev.filter((s) => s.id !== suggestion.id));
@@ -386,7 +401,11 @@ export default function ResumeConstructor() {
                                 background: "white",
                             }}
                         >
-                            <ResumePreview resume={resume} setResume={setResume} />
+                            <ResumePreview
+                                resume={resume}
+                                setResume={setResume}
+                                highlightedItemIds={highlightedIds} // pass highlights
+                            />
                         </div>
                     </div>
 
