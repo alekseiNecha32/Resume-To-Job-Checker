@@ -3,6 +3,7 @@ from flask import Flask
 from flask_cors import CORS
 from dotenv import load_dotenv
 
+from app.routes.export_docx import export_bp
 
 from app.blueprints.authorization import auth_bp
 from app.blueprints.api import api_bp
@@ -43,6 +44,7 @@ def create_app():
     app.register_blueprint(smart_bp)
     app.register_blueprint(stripe_bp)   
     app.register_blueprint(auth_bp)
+    app.register_blueprint(export_bp)
 
     @app.get("/health")
     def health():

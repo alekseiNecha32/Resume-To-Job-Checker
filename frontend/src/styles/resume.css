@@ -1,0 +1,293 @@
+.resume-card {
+  width: 816px;
+  max-width: 816px;
+  margin: 0 auto;
+  background: #fff;
+  color: #111;
+  line-height: 1.25;
+  font-size: 12px;
+}
+
+@media print {
+  .resume-card {
+    box-shadow: none !important;
+    border: none !important;
+    width: 816px;
+    max-width: 816px;
+  }
+  .no-print {
+    display: none !important;
+  }
+}
+
+/* --- Top hero layout --- */
+.ats-layout {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem 3rem;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #111827;
+}
+
+/* Main card */
+.ats-main-card {
+  background: radial-gradient(circle at top left, #f5f9ff 0, #f3f4ff 35%, #f9fafb 100%);
+  border-radius: 24px;
+  padding: 1.75rem 2rem 1.5rem;
+  box-shadow: 0 14px 40px rgba(15, 23, 42, 0.12);
+  border: 1px solid rgba(209, 213, 219, 0.7);
+}
+
+/* Header text */
+.ats-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.3rem;
+}
+
+.ats-heading {
+  margin: 0;
+  font-size: 1.7rem;
+  font-weight: 700;
+}
+
+.ats-subtext {
+  margin: 0.2rem 0 0;
+  font-size: 0.95rem;
+  color: #6b7280;
+}
+
+/* Two-column grid */
+.ats-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.3fr);
+  gap: 1.8rem;
+}
+
+.ats-left,
+.ats-right {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+/* Labels */
+.ats-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #374151;
+}
+
+.ats-label-muted {
+  font-weight: 400;
+  color: #9ca3af;
+  margin-left: 0.2rem;
+}
+
+.ats-label-help {
+  margin: 0.2rem 0 0.3rem;
+  font-size: 0.8rem;
+  color: #9ca3af;
+}
+
+/* Upload box */
+.ats-upload-box {
+  margin-top: 0.4rem;
+  border-radius: 18px;
+  border: 1.8px dashed #cbd5e1;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.8), rgba(239, 246, 255, 0.9));
+  padding: 2.2rem 1.5rem;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.06s ease;
+}
+
+.ats-upload-box:hover {
+  border-color: #6366f1;
+  box-shadow: 0 10px 30px rgba(79, 70, 229, 0.18);
+  transform: translateY(-1px);
+}
+
+.ats-upload-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  background: linear-gradient(135deg, #6366f1, #3b82f6);
+  color: white;
+  margin-bottom: 0.7rem;
+}
+
+.ats-upload-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #111827;
+}
+
+.ats-upload-sub {
+  margin: 0.2rem 0 0;
+  font-size: 0.8rem;
+  color: #6b7280;
+}
+
+/* Hide native file input */
+.ats-file-input-hidden {
+  display: none;
+}
+
+/* Job inputs */
+.ats-input {
+  border-radius: 999px;
+  border: 1px solid #d1d5db;
+  padding: 0.55rem 0.9rem;
+  font-size: 0.9rem;
+  outline: none;
+  background: #f9fafb;
+}
+
+.ats-input:focus {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.25);
+  background: #ffffff;
+}
+
+.ats-textarea {
+  width: 100%;
+  border-radius: 14px;
+  border: 1px solid #d1d5db;
+  padding: 0.6rem 0.8rem;
+  font-size: 0.9rem;
+  resize: vertical;
+  min-height: 160px;
+  background: #f9fafb;
+}
+
+.ats-textarea:focus {
+  outline: none;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.25);
+  background: #ffffff;
+}
+
+/* Center button row */
+.ats-center-actions {
+  margin-top: 1.3rem;
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  justify-content: center;
+}
+
+.ats-btn-primary {
+  border: none;
+  border-radius: 999px;
+  padding: 0.6rem 1.8rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: white;
+  box-shadow: 0 12px 32px rgba(79, 70, 229, 0.35);
+  transition: transform 0.07s ease, box-shadow 0.12s ease, opacity 0.15s ease;
+}
+
+.ats-btn-primary:disabled {
+  opacity: 0.55;
+  cursor: default;
+  box-shadow: none;
+}
+
+.ats-btn-primary:not(:disabled):hover {
+  transform: translateY(-1px);
+  box-shadow: 0 16px 38px rgba(79, 70, 229, 0.45);
+}
+
+.ats-status {
+  font-size: 0.8rem;
+  color: #4b5563;
+}
+
+.ats-error {
+  font-size: 0.8rem;
+  color: #b91c1c;
+}
+
+/* Smart Analysis card */
+.ats-smart-card {
+  margin-top: 1.6rem;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 18px;
+  padding: 0.9rem 1.2rem;
+  border: 1px solid rgba(209, 213, 219, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.ats-smart-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.ats-smart-sub {
+  margin: 0.2rem 0 0;
+  font-size: 0.85rem;
+  color: #6b7280;
+}
+
+.ats-smart-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.ats-btn-secondary {
+  border-radius: 999px;
+  padding: 0.45rem 1.4rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  border: 1px solid #d1d5db;
+  background: #f9fafb;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.ats-btn-secondary:hover:not(:disabled) {
+  background: #eef2ff;
+  border-color: #6366f1;
+}
+
+.ats-btn-secondary:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.ats-credits {
+  font-size: 0.85rem;
+  color: #4b5563;
+}
+
+/* Existing resume-grid styles (from previous answer) stay the same */
+
+/* Responsive */
+@media (max-width: 900px) {
+  .ats-main-card {
+    padding: 1.4rem 1.3rem;
+  }
+
+  .ats-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ats-smart-card {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

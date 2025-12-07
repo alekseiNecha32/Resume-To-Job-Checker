@@ -45,6 +45,17 @@ export async function scoreResume(resumeText, jobText, jobTitle = "") {
     denominator: data.denominator ?? undefined,
   };
 }
+// ...existing code...
+export async function suggestResume({ resume, jobText }) {
+  const res = await fetch(`${API_BASE}/smart/suggest`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ resume, jobText }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message || "Failed to get suggestions");
+  return data.suggestions || [];
+}
 
 export async function smartAnalyze({ resumeText, jobText, jobTitle }) {
   const headers = await authHeaders();
@@ -147,7 +158,24 @@ export async function extractTextFromFileAPI(file) {
   const data = await res.json();
   return data.text ?? "";
 }
+export async function downloadOptimizedResumeDocx(resume) {
+  const res = await fetch(`${API_BASE}/export/resume-docx`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      // If you use Supabase auth, you can also send token here:
+      // ...(token && { Authorization: `Bearer ${token}` }),
+    },
+    body: JSON.stringify({ resume }),
+  });
 
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Failed to export DOCX: ${res.status} ${text}`);
+  }
+
+  return await res.blob(); // .docx file contents
+}
 
 export async function apiCall(endpoint, options = {}) {
   const url = `${API_BASE}${endpoint}`;

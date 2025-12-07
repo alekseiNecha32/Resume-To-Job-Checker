@@ -5,6 +5,7 @@ import NavBar from "./components/Navbar.jsx";
 import PaySuccess from "./components/PaySuccess";
 import { MeProvider } from "./context/MeContext.jsx";
 import PayCancel from "./components/PayCancel.jsx";
+import ResumeConstructor from "./components/ResumeConstructor.jsx";
 
 export default function App() {
    return (
@@ -14,6 +15,8 @@ export default function App() {
           <NavBar />
           <Routes>
             <Route path="/" element={<Analyze />} />
+            <Route path="/constructor" element={<ResumeConstructor />} />
+
             <Route path="/pay/success" element={<PaySuccess />} />
             <Route path="/pay/cancel" element={<PayCancel />} />
 

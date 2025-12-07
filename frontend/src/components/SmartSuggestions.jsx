@@ -2,13 +2,15 @@ import { useState, useEffect } from "react";
 import { smartAnalyze, getMe, createCheckoutSession } from "../services/apiClient";
 import AuthBox from "./AuthBox";
 
+
 export default function SmartSuggestions({ resumeText, jobText, jobTitle, data: initialData = null }) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState(initialData);
   const [err, setErr] = useState(null);
   const [needAuth, setNeedAuth] = useState(false);
-
+const [legoResume, setLegoResume] = useState(null);       // NEW
+const [legoSuggestions, setLegoSuggestions] = useState([]); // NEW
   // If parent passes data, open panel and display it (do NOT call smartAnalyze again)
   useEffect(() => {
     if (initialData) {
