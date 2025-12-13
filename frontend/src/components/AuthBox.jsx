@@ -1,28 +1,57 @@
 import { useState } from "react";
 import { supabase } from "../lib/supabaseClient";
+import { useNavigate } from "react-router-dom"; // NEW
 
 export default function AuthBox({ onDone }) {
   const [email, setEmail] = useState("");
   const [password, setPwd] = useState("");
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
+  const [info, setInfo] = useState("");
+  const nav = useNavigate()
 
   async function signIn() {
     setErr("");
+    setInfo("");
     setLoading(true);
+
     const { error } = await supabase.auth.signInWithPassword({ email, password });
+
     setLoading(false);
     if (error) setErr(error.message);
     else onDone?.();
   }
+  
 
-  async function signUp() {
+    async function signUp() {
     setErr("");
+    setInfo("");
     setLoading(true);
-    const { error } = await supabase.auth.signUp({ email, password });
+
+    const redirectTo = `${window.location.origin}/auth/callback`;
+
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { emailRedirectTo: redirectTo },
+    });
+
     setLoading(false);
-    if (error) setErr(error.message);
-    else onDone?.();
+
+    if (error) {
+      setErr(error.message);
+      return;
+    }
+
+    // Email confirmations ON => session is null, show message + go to callback page
+    if (!data?.session) {
+      setInfo("Wait for confirmation email to confirm your email.");
+      nav("/auth/callback");
+      return;
+    }
+
+    // Confirmations OFF => logged in immediately
+    onDone?.();
   }
 
   return (
@@ -48,14 +77,15 @@ export default function AuthBox({ onDone }) {
           disabled={loading}
           className="px-3 py-2 rounded bg-indigo-600 text-white"
         >
-          Sign in
+          {loading ? "Working..." : "Sign in"}
         </button>
         <button
           onClick={signUp}
           disabled={loading}
           className="px-3 py-2 rounded border"
         >
-          Sign up
+          {loading ? "Working..." : "Sign up"}
+
         </button>
       </div>
     </div>

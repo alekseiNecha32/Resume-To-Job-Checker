@@ -129,8 +129,6 @@ export default function NavBar() {
         </div>
         <div className="rtjc-nav-links">
               
-<Link to="/" className="rtjc-nav-btn">Analyze Resume</Link>
-<Link to="/constructor" className="rtjc-nav-btn">Resume Constructor</Link>
             </div>
 
         <div className="rtjc-actions">

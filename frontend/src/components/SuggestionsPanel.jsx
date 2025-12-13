@@ -65,8 +65,8 @@ function SuggestionCard({ suggestion, onAccept, onReject }) {
       )}
 
       <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem" }}>
-        <button onClick={onAccept}>Accept</button>
-        <button onClick={onReject}>Reject</button>
+         <button className="ats-btn-accept" onClick={onAccept}>Accept</button>
+        <button className="ats-btn-reject" onClick={onReject}>Reject</button>
       </div>
     </div>
   );

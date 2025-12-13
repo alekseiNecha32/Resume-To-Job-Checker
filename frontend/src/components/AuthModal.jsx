@@ -1,7 +1,8 @@
 import React, { useState } from "react";
 import { supabase } from "../lib/supabaseClient";
-import { API_BASE, authHeaders} from "../services/apiClient";
+import { API_BASE, authHeaders } from "../services/apiClient";
 import { useMe } from "../context/MeContext.jsx";
+import { useNavigate } from "react-router-dom"; // NEW
 
 export default function AuthModal({ onClose, onSuccess }) {
   const [mode, setMode] = useState("signup");
@@ -9,23 +10,34 @@ export default function AuthModal({ onClose, onSuccess }) {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState(null);
-  const [fullName, setFullName] = useState(""); 
+  const [fullName, setFullName] = useState("");
   const { setMe } = useMe();
+
+  const nav = useNavigate(); // NEW
 
   async function handleSignup() {
     setLoading(true); setMsg(null);
     try {
-      const { error } = await supabase.auth.signUp({
+      const redirectBase = import.meta.env.VITE_PUBLIC_SITE_URL || window.location.origin;
+
+      const redirectTo = `${redirectBase}/auth/callback`;
+
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          // redirect to your app home after email confirmation
-          emailRedirectTo: window.location.origin,
+          emailRedirectTo: redirectTo,
           data: fullName ? { full_name: fullName } : {},
         },
       });
       if (error) throw error;
-      setMsg("We sent you a confirmation link. Please verify your email to log in.");
+
+      if (!data?.session) {
+        setMsg("Wait for confirmation email to confirm your email.");
+        onClose?.();                 // close modal so callback page is visible
+        nav("/auth/callback");       // show the pending-confirmation page
+        return;
+      }
 
       const session = (await supabase.auth.getSession()).data?.session;
       if (session) {
@@ -38,13 +50,13 @@ export default function AuthModal({ onClose, onSuccess }) {
             await fetch(`${API_BASE}/auth/create_profile`, {
               method: "POST",
               headers: { Authorization: `Bearer ${session.access_token}` },
-            }).catch(() => {});
+            }).catch(() => { });
             resp = await fetch(`${API_BASE}/me`, {
               headers: { Authorization: `Bearer ${session.access_token}` },
             });
           }
           if (resp.ok) setMe(await resp.json());
-        } catch {}
+        } catch { }
       }
 
       onSuccess?.();
@@ -54,7 +66,7 @@ export default function AuthModal({ onClose, onSuccess }) {
       setLoading(false);
     }
   }
-async function handleLogin(e) {
+  async function handleLogin(e) {
     e.preventDefault();
     setMsg(null);
     setLoading(true);

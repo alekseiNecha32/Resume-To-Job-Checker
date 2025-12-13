@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from "react";
-import { getMe } from "../services/apiClient.js";
+import { API_BASE } from "../services/apiClient.js";
 import { supabase } from "../lib/supabaseClient";
 
 const MeContext = createContext(null);
@@ -13,81 +13,95 @@ export function MeProvider({ children }) {
       return null;
     }
   });
-// Start true to avoid flicker on first paint
+
   const [loading, setLoading] = useState(true);
   const inFlight = useRef(false);
 
-async function revalidate() {
-  if (inFlight.current) return;
-  inFlight.current = true;
-  setLoading(true); // start in loading state
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.access_token) return; // keep cached me, do not clear
-    const profile = await getMe();
-    if (profile) {
-      setMe(profile);
-      try { localStorage.setItem("cachedProfile", JSON.stringify(profile)); } catch {}
-    }
-  } catch {
-    // keep stale me on error
-  } finally {
-    inFlight.current = false;
-    setLoading(false);
+  async function fetchMe(accessToken) {
+    return fetch(`${API_BASE}/me`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
   }
-}
 
+  async function ensureProfile(accessToken) {
+    // 1) Try /me
+    const resp = await fetchMe(accessToken);
 
-useEffect(() => {
-  // show cache immediately, then refresh
-  setLoading(true);
-  revalidate();
+    // 2) If missing, create profile then retry
+    if (resp.status === 404) {
+      await fetch(`${API_BASE}/auth/create_profile`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}` },
+      }).catch(() => {});
 
-  const { data: sub } = supabase.auth.onAuthStateChange(async (event) => {
-    if (event === "SIGNED_OUT") {
-      setMe(null);
-      try { localStorage.removeItem("cachedProfile"); } catch {}
-      return;
+      const resp2 = await fetchMe(accessToken);
+      if (resp2.ok) return await resp2.json();
+      return null;
     }
-    if (event === "SIGNED_IN" || event === "USER_UPDATED" || event === "TOKEN_REFRESHED") {
-      setLoading(true);
-      revalidate();
-    }
-    // do not clear on INITIAL_SESSION
-  });
 
-  const onFocus = () => {
+    // 3) If ok, return profile
+    if (resp.ok) return await resp.json();
+
+    return null;
+  }
+
+  async function revalidate() {
+    if (inFlight.current) return;
+    inFlight.current = true;
     setLoading(true);
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (!session?.access_token) return; // keep cached me, do not clear
+
+      const profile = await ensureProfile(session.access_token);
+
+      if (profile) {
+        setMe(profile);
+        try { localStorage.setItem("cachedProfile", JSON.stringify(profile)); } catch {}
+      } else {
+        // fallback: still show "logged in" state
+        setMe((prev) => prev ?? { email: session.user.email, credits: 0 });
+      }
+    } finally {
+      inFlight.current = false;
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
     revalidate();
-  };
-  const onVisible = () => {
-    if (document.visibilityState === "visible") {
-      setLoading(true);
-      revalidate();
-    }
-  };
-  window.addEventListener("focus", onFocus);
-  document.addEventListener("visibilitychange", onVisible);
 
-  const onProfileUpdated = (e) => {
-    const next = e?.detail;
-    if (next) {
-      setMe(next);
-      try { localStorage.setItem("cachedProfile", JSON.stringify(next)); } catch {}
-    } else {
-      setLoading(true);
-      revalidate();
-    }
-  };
-  window.addEventListener("profile_updated", onProfileUpdated);
+    const { data: sub } = supabase.auth.onAuthStateChange(async (event) => {
+      if (event === "SIGNED_OUT") {
+        setMe(null);
+        try { localStorage.removeItem("cachedProfile"); } catch {}
+        setLoading(false);
+        return;
+      }
 
-  return () => {
-    window.removeEventListener("focus", onFocus);
-    document.removeEventListener("visibilitychange", onVisible);
-    window.removeEventListener("profile_updated", onProfileUpdated);
-    sub?.subscription?.unsubscribe?.();
-  };
-}, []);
+      if (event === "SIGNED_IN" || event === "USER_UPDATED" || event === "TOKEN_REFRESHED") {
+        revalidate();
+      }
+    });
+
+    const onProfileUpdated = (e) => {
+      const next = e?.detail;
+      if (next) {
+        setMe(next);
+        try { localStorage.setItem("cachedProfile", JSON.stringify(next)); } catch {}
+      } else {
+        revalidate();
+      }
+    };
+    window.addEventListener("profile_updated", onProfileUpdated);
+
+    return () => {
+      window.removeEventListener("profile_updated", onProfileUpdated);
+      sub?.subscription?.unsubscribe?.();
+    };
+  }, []);
 
   return (
     <MeContext.Provider value={{ me, setMe, loading, hasProfile: !!me }}>

@@ -101,6 +101,10 @@ export default function ResumeConstructor() {
     const [downloading, setDownloading] = useState(false); // ⭐ YOU MUST ADD THIS
     const { me, setMe } = useMe();
     const [highlightedIds, setHighlightedIds] = useState([]); // NEW
+    const [missingKeywords, setMissingKeywords] = useState([]); // NEW
+    const [criticalGaps, setCriticalGaps] = useState([]);       // NEW
+    const [fitEstimate, setFitEstimate] = useState(null);          // NEW
+    const [presentSkills, setPresentSkills] = useState([]);
 
     const normalizeExtractedText = (text) => {
         return text
@@ -130,7 +134,6 @@ export default function ResumeConstructor() {
         setLoading(true);
         setError(null);
         try {
-            // Charge credit + run smart analysis (backend deducts)
             const { analysis, profile: refreshedProfile } = await smartAnalyze({
                 resumeText: rawResume,
                 jobText,
@@ -149,7 +152,30 @@ export default function ResumeConstructor() {
             const structured = parseResume(rawResume);
             setResume(structured);
 
-            // Use suggestions from smartAnalyze if present; fallback to suggestResume
+            // NEW: capture fit estimate & skill buckets
+            setFitEstimate(
+                analysis?.fit_estimate ??
+                analysis?.data?.fit_estimate ??
+                null
+            );
+            setPresentSkills(
+                analysis?.present_skills ||
+                analysis?.data?.present_skills ||
+                []
+            );
+            setMissingKeywords(
+                analysis?.missing_skills ||
+                analysis?.missing_keywords ||
+                analysis?.data?.missing_skills ||
+                analysis?.data?.missing_keywords ||
+                []
+            );
+            setCriticalGaps(
+                analysis?.critical_gaps ||
+                analysis?.data?.critical_gaps ||
+                []
+            );
+
             const suggs =
                 analysis?.lego_suggestions ||
                 analysis?.suggestions ||
@@ -167,7 +193,6 @@ export default function ResumeConstructor() {
             setLoading(false);
         }
     };
-
 
     const handleAcceptSuggestion = (suggestion) => {
         if (!resume) return;
@@ -234,7 +259,7 @@ export default function ResumeConstructor() {
 
 
     const handleDownloadDocx = async () => {
-        if (!resume) return; // nothing yet
+        if (!resume) return; 
 
         try {
             setDownloading(true);
@@ -305,18 +330,8 @@ export default function ResumeConstructor() {
                         </div>
                     </div>
 
-                    {/* RIGHT: Job title + description */}
                     <div className="ats-right">
-                        {/* <div className="ats-job-title-wrapper">
-              <label className="ats-label">Job Title</label>
-              <input
-                type="text"
-                className="ats-input"
-                placeholder="e.g., React Frontend Developer"
-                value={jobTitle}
-                onChange={(e) => setJobTitle(e.target.value)}
-              />
-            </div> */}
+
 
                         <div className="ats-job-description-wrapper">
                             <label className="ats-label">Job Description</label>
@@ -326,7 +341,7 @@ export default function ResumeConstructor() {
                             <textarea
                                 value={jobText}
                                 onChange={(e) => setJobText(e.target.value)}
-                                placeholder="(Optional) Paste job description..."
+                                placeholder="Paste job description..."
                                 rows={4}
                                 style={{ width: "100%", marginBottom: "0.5rem" }}
                             />
@@ -335,12 +350,7 @@ export default function ResumeConstructor() {
                 </div>
 
                 <div className="ats-center-actions">
-                    {/* <button
-                    onClick={handleAnalyze}
-                    disabled={loading || !resumeFile}   // <-- must have file
-                >
-                    {loading ? "Analyzing..." : "Run Smart Suggestions"}
-                </button> */}
+
                     {uploading && <span className="ats-status">Extracting text from resume…</span>}
                     {error && <span className="ats-error">{error}</span>}
                 </div>
@@ -404,28 +414,83 @@ export default function ResumeConstructor() {
                             <ResumePreview
                                 resume={resume}
                                 setResume={setResume}
-                                highlightedItemIds={highlightedIds} // pass highlights
+                                highlightedItemIds={highlightedIds}
                             />
                         </div>
                     </div>
 
                     <div>
-                        <h2>AI Suggestions</h2>
-                        <SuggestionsPanel
-                            suggestions={suggestions}
-                            onAccept={handleAcceptSuggestion}
-                            onReject={handleRejectSuggestion}
-                        />
-                    </div>
+                        {/* Fit + Gaps / Matched + Missing */}
+                        <div className="ats-match-grid2">
+                            <div className="ats-fit-card">
+                                <div className="ats-fit-value">
+                                    {fitEstimate != null ? `${Math.round(fitEstimate)}%` : "--"}
+                                </div>
+                                <div>
+                                    <div className="ats-fit-label">Fit estimate</div>
+                                    <div className="ats-fit-note">
+                                        Heuristic only — not an ATS guarantee.
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="ats-gap-card">
+                                <div className="ats-match-title">Top Critical Gaps</div>
+                                <div className="ats-chip-row">
+                                    {criticalGaps.length === 0 ? (
+                                        <span className="ats-chip ats-chip-muted">None</span>
+                                    ) : (
+                                        criticalGaps.map((k, i) => (
+                                            <span key={i} className="ats-chip ats-chip-amber">{k}</span>
+                                        ))
+                                    )}
+                                </div>
+                            </div>
+                            <div className="ats-match-card">
+                                <div className="ats-match-title">Matched (Expanded)</div>
+                                <div className="ats-chip-row">
+                                    {presentSkills.length === 0 ? (
+                                        <span className="ats-chip ats-chip-muted">None</span>
+                                    ) : (
+                                        presentSkills.map((k, i) => (
+                                            <span key={i} className="ats-chip ats-chip-green">{k}</span>
+                                        ))
+                                    )}
+                                </div>
+                            </div>
+                            <div className="ats-match-card">
+                                <div className="ats-match-title">Missing (Smart)</div>
+                                <div className="ats-chip-row">
+                                    {missingKeywords.length === 0 ? (
+                                        <span className="ats-chip ats-chip-muted">None</span>
+                                    ) : (
+                                        missingKeywords.map((k, i) => (
+                                            <span key={i} className="ats-chip ats-chip-red">{k}</span>
+                                        ))
+                                    )}
+                                </div>
+                            </div>
+                        </div>
 
-                    <pre
-                        style={{
-                            whiteSpace: "pre-wrap",
-                            fontSize: "12px",
-                            marginTop: "20px",
-                        }}
-                    >
-                    </pre>
+                        <div className="ats-suggestions-card">
+                            <div className="ats-sugg-header">
+                                <h2 className="ats-sugg-title">AI Suggestions</h2>
+                                <span className="ats-sugg-note">
+                                    Accept to apply instantly to your live resume.
+                                </span>
+                            </div>
+                            <div className="ats-sugg-body">
+                                {loading ? (
+                                    <div className="ats-sugg-placeholder">Wait for the magic to happen…</div>
+                                ) : (
+                                    <SuggestionsPanel
+                                        suggestions={suggestions}
+                                        onAccept={handleAcceptSuggestion}
+                                        onReject={handleRejectSuggestion}
+                                    />
+                                )}
+                            </div>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>

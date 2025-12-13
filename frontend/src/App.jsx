@@ -1,4 +1,4 @@
-import Analyze from "./pages/Analyze.jsx";
+// import Analyze from "./pages/Analyze.jsx";
 import "./styles/global.css";
 import { BrowserRouter as Router, Route, Routes } from "react-router-dom";
 import NavBar from "./components/Navbar.jsx";
@@ -6,6 +6,7 @@ import PaySuccess from "./components/PaySuccess";
 import { MeProvider } from "./context/MeContext.jsx";
 import PayCancel from "./components/PayCancel.jsx";
 import ResumeConstructor from "./components/ResumeConstructor.jsx";
+import AuthCallback from "./services/AuthCallback.jsx"; // NEW
 
 export default function App() {
    return (
@@ -14,8 +15,9 @@ export default function App() {
         <div>
           <NavBar />
           <Routes>
-            <Route path="/" element={<Analyze />} />
-            <Route path="/constructor" element={<ResumeConstructor />} />
+            {/* <Route path="/" element={<Analyze />} /> */}
+            <Route path="/" element={<ResumeConstructor />} />
+            <Route path="/auth/callback" element={<AuthCallback />} />
 
             <Route path="/pay/success" element={<PaySuccess />} />
             <Route path="/pay/cancel" element={<PayCancel />} />
