@@ -67,7 +67,60 @@
   flex-wrap: wrap;
   gap: 8px;
 }
+/* ...existing code... */
 
+.ats-textarea {
+  width: 100%;
+  min-height: 140px;
+  padding: 14px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(120, 130, 160, 0.25);
+  background: rgba(255, 255, 255, 0.85);
+  color: #111827;
+  font-size: 14px;
+  line-height: 1.5;
+  outline: none;
+  resize: vertical;
+  box-shadow: 0 1px 0 rgba(17, 24, 39, 0.03);
+}
+
+.ats-textarea::placeholder {
+  color: rgba(107, 114, 128, 0.8);
+}
+
+.ats-textarea:focus {
+  border-color: rgba(99, 102, 241, 0.55);
+  box-shadow:
+    0 0 0 4px rgba(99, 102, 241, 0.12),
+    0 1px 0 rgba(17, 24, 39, 0.03);
+}
+
+.ats-textarea:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+.ats-resume-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.ats-resume-title {
+  margin: 0;
+}
+
+.ats-download-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+/* Optional: make wrapper spacing consistent */
+.ats-job-description-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
 .ats-chip {
   padding: 6px 12px;
   border-radius: 999px;

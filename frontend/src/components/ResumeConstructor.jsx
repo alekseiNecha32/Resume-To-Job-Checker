@@ -106,6 +106,9 @@ export default function ResumeConstructor() {
     const [fitEstimate, setFitEstimate] = useState(null);          // NEW
     const [presentSkills, setPresentSkills] = useState([]);
 
+    const [extractedChars, setExtractedChars] = useState(0);
+    const [extractedWords, setExtractedWords] = useState(0);
+
     const normalizeExtractedText = (text) => {
         return text
             .replace(/^(%Ï\s*)+/gm, "")          // remove %Ï at line start
@@ -115,19 +118,33 @@ export default function ResumeConstructor() {
     const handleFilePick = async (e) => {
         const file = e.target.files?.[0];
         if (!file) return;
-        setResumeFile(file);                 // <-- store selected file
+
+        setResumeFile(file);
         setError(null);
         setUploading(true);
+
+        // NEW: reset stats until we finish extracting
+        setExtractedChars(0);
+        setExtractedWords(0);
+
         try {
             const textRaw = await extractTextFromFileAPI(file);
             const textClean = normalizeExtractedText(textRaw || "");
             setRawResume(textClean);
+
+            // NEW: compute stats
+            const chars = textClean.length;
+            const words = textClean.trim() ? textClean.trim().split(/\s+/).length : 0;
+
+            setExtractedChars(chars);
+            setExtractedWords(words);
         } catch (err) {
             setError(err?.message || "Failed to extract text from file.");
         } finally {
             setUploading(false);
         }
     };
+
     const handleAnalyze = async () => {
         if (loading) return;
         if (!resumeFile && !rawResume.trim()) return;
@@ -259,7 +276,7 @@ export default function ResumeConstructor() {
 
 
     const handleDownloadDocx = async () => {
-        if (!resume) return; 
+        if (!resume) return;
 
         try {
             setDownloading(true);
@@ -318,7 +335,19 @@ export default function ResumeConstructor() {
                             <p className="ats-upload-sub">
                                 PDF, DOCX or TXT (max 5MB)
                             </p>
+                            {uploading && (
+                                <p className="ats-upload-sub" style={{ marginTop: "0.5rem" }}>
+                                    Extracting text…
+                                </p>
+                            )}
 
+                            {!uploading && !error && extractedChars > 0 && (
+                                <p className="ats-upload-sub" style={{ marginTop: "0.5rem" }}>
+                                    Extracted {extractedChars.toLocaleString()} characters
+                                    {extractedWords ? ` (${extractedWords.toLocaleString()} words)` : ""}
+                                    {resumeFile?.name ? ` • ${resumeFile.name}` : ""}
+                                </p>
+                            )}
                             <input
                                 ref={fileInputRef}
                                 type="file"
@@ -342,9 +371,11 @@ export default function ResumeConstructor() {
                                 value={jobText}
                                 onChange={(e) => setJobText(e.target.value)}
                                 placeholder="Paste job description..."
-                                rows={4}
-                                style={{ width: "100%", marginBottom: "0.5rem" }}
+                                rows={6}
+                                className="ats-textarea"
+                                disabled={loading || uploading}
                             />
+
                         </div>
                     </div>
                 </div>
@@ -393,9 +424,13 @@ export default function ResumeConstructor() {
                     }}
                 >
                     <div>
-                        <div style={{ display: "flex", justifyContent: "space-between" }}>
-                            <h2>Your Resume (Live)</h2>
+                        {/* CHANGED: use a styled header row + button */}
+                        <div className="ats-resume-header">
+                            <h2 className="ats-resume-title">Your Resume (Live)</h2>
+
                             <button
+                                type="button"
+                                className="ats-btn-secondary ats-download-btn"
                                 onClick={handleDownloadDocx}
                                 disabled={downloading || !resume}
                             >

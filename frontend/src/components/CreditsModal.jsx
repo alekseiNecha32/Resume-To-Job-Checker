@@ -14,18 +14,21 @@ export default function CreditsModal({ onClose }) {
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  // Pricing: custom pack = $1 per credit (client preview only)
+  // Pricing: custom pack = $2 per credit (client preview only)
+  const CUSTOM_USD_PER_CREDIT = 2;
+
   function calcPriceForCredits(credits) {
-    return Math.max(0, Math.floor(credits));
+    const c = Math.max(1, Math.floor(Number(credits) || 1));
+    return c * CUSTOM_USD_PER_CREDIT;
   }
 
-  // replace simulated purchase with real checkout flow
   async function startCheckout({ packId, credits } = {}) {
     setProcessing(true);
     setMsg("");
     try {
       const payload = { packId };
       if (packId === "custom") payload.credits = Math.max(1, Math.floor(credits || 0));
+
       // Store intended credits locally for optimistic UI after redirect
       try {
         const intended = packId === "pro" ? 10 : (payload.credits || 0);
@@ -36,6 +39,7 @@ export default function CreditsModal({ onClose }) {
           );
         }
       } catch (_) {}
+
       const data = await createCheckoutSession(payload);
       if (data?.url) {
         window.location.href = data.url;
@@ -66,7 +70,8 @@ export default function CreditsModal({ onClose }) {
           <div>
             <h2 className="text-xl font-semibold">Buy Smart Analysis Credits</h2>
             <p className="mt-1 text-sm text-gray-500">
-              Use credits to unlock AI-powered smart analysis with detailed insights and personalized recommendations.
+              Unlock Pro smart analysis (critical gaps + matching/missing keywords) and get 3 live AI suggestions
+              inside the Resume Constructor to add, or reject while you build. Also you can download file to make additional edits.
             </p>
           </div>
           <button
@@ -82,16 +87,20 @@ export default function CreditsModal({ onClose }) {
           {/* Pro Pack card */}
           <div className="rounded-xl border-2 border-indigo-300 p-6">
             <div className="flex justify-center">
-              <div className="badge inline-flex items-center bg-indigo-600 text-white px-3 py-1 rounded-full text-sm">Most Popular</div>
+              <div className="badge inline-flex items-center bg-indigo-600 text-white px-3 py-1 rounded-full text-sm">
+                Most Popular
+              </div>
             </div>
             <div className="text-center mt-4">
               <div className="text-lg font-medium">Pro Pack</div>
-              <div className="text-4xl font-extrabold mt-3">$5</div>
+              <div className="text-4xl font-extrabold mt-3">$7</div>
               <div className="text-sm text-gray-500 mt-1">10 credits</div>
 
               <ul className="mt-4 space-y-2 text-sm text-gray-700">
-                <li>✓ 10 Smart Analyses</li>
-                <li>✓ Advanced Insights</li>
+                <li>✓ Resume Constructor: 3 live AI suggestions you can accept orreject</li>
+                <li>✓ Critical gaps based on the job description</li>
+                <li>✓ Matching keywords + missing keywords + fit estimate</li>
+                <li>✓ Advanced insights</li>
               </ul>
 
               <button
@@ -149,7 +158,7 @@ export default function CreditsModal({ onClose }) {
             </div>
 
             <div className="mt-4 text-center text-sm text-gray-500">
-              Pricing: $1 = 1 credit. Edit amount directly or use the buttons.
+              Pricing: $2 = 1 credit. Edit credits directly or use the buttons.
             </div>
 
             <div className="mt-6 flex justify-center">
@@ -170,7 +179,9 @@ export default function CreditsModal({ onClose }) {
           )}
 
           <div className="text-right">
-            <button onClick={onClose} className="text-sm text-gray-600 hover:underline">Close</button>
+            <button onClick={onClose} className="text-sm text-gray-600 hover:underline">
+              Close
+            </button>
           </div>
         </div>
       </div>

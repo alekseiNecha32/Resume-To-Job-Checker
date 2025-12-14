@@ -27,8 +27,10 @@ if SUPABASE_URL and SUPABASE_KEY:
 
 # server-side pack truth (only pro + custom)
 PACKS = {
-    "pro": {"credits": 10, "amount_dollars": 5},
+    "pro": {"credits": 10, "amount_dollars": 7},
 }
+
+CUSTOM_USD_PER_CREDIT = 2
 
 
 def _resolve_user_id(req):
@@ -82,8 +84,9 @@ def checkout():
             return jsonify({"error": "invalid_credits"}), 400
         if credits < 1:
             return jsonify({"error": "invalid_credits"}), 400
-        # pricing: $1 per credit for custom
-        amount_dollars = credits * 1
+        # pricing: $2 per credit for custom
+        amount_dollars = credits * CUSTOM_USD_PER_CREDIT
+
 
     amount_cents = int(round(amount_dollars * 100))
     user_id = _resolve_user_id(request) or ""
