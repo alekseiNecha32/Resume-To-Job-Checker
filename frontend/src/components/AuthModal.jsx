@@ -33,9 +33,17 @@ export default function AuthModal({ onClose, onSuccess }) {
       if (error) throw error;
 
       if (!data?.session) {
+        // NEW: allow "auto login after confirm" even if user confirms on another device
+        try {
+          sessionStorage.setItem(
+            "pendingSignup",
+            JSON.stringify({ email, password, ts: Date.now() })
+          );
+        } catch {}
+
         setMsg("Wait for confirmation email to confirm your email.");
-        onClose?.();                 // close modal so callback page is visible
-        nav("/auth/callback");       // show the pending-confirmation page
+        onClose?.();
+        nav("/auth/callback");
         return;
       }
 

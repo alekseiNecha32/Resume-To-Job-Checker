@@ -3,14 +3,34 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
 
 function hasAuthParams(url) {
-  // Supabase can return either:
-  // - ?code=... (PKCE)
-  // - or #access_token=... (implicit)
   return (
     url.searchParams.has("code") ||
     url.hash.includes("access_token=") ||
     url.searchParams.has("access_token")
   );
+}
+
+function readPendingSignup() {
+  try {
+    const raw = sessionStorage.getItem("pendingSignup");
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    const ts = Number(parsed?.ts || 0);
+
+    // expire after 15 minutes
+    if (!ts || Date.now() - ts > 15 * 60 * 1000) {
+      sessionStorage.removeItem("pendingSignup");
+      return null;
+    }
+    if (!parsed?.email || !parsed?.password) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function clearPendingSignup() {
+  try { sessionStorage.removeItem("pendingSignup"); } catch {}
 }
 
 export default function AuthCallback() {
@@ -24,17 +44,76 @@ export default function AuthCallback() {
     (async () => {
       const url = new URL(window.location.href);
 
-      // If user was sent here right after clicking "Sign up"
-      // (no tokens yet), show the "check email" message.
       if (!hasAuthParams(url)) {
-        if (!alive) return;
-        setStatus("Wait for confirmation email to confirm your email.");
+        const pending = readPendingSignup();
         setCanGoHome(true);
-        return;
+
+        if (!pending) {
+          setStatus("Wait for confirmation email to confirm your email.");
+          return;
+        }
+
+        setStatus("Waiting for confirmation… We’ll sign you in automatically once confirmed.");
+
+        // Poll: once email is confirmed, password sign-in will start succeeding
+        let attempts = 0;
+        const maxAttempts = 40; // ~2 minutes at 3s interval
+        const tickMs = 3000;
+
+        const timer = setInterval(async () => {
+          if (!alive) return;
+          attempts += 1;
+
+          try {
+            const { error } = await supabase.auth.signInWithPassword({
+              email: pending.email,
+              password: pending.password,
+            });
+
+            if (!alive) return;
+
+            if (!error) {
+              clearInterval(timer);
+              clearPendingSignup();
+
+              setStatus("Email confirmed. You are now logged in.");
+              setCanGoHome(true);
+
+              // Force MeContext to revalidate immediately
+              window.dispatchEvent(new CustomEvent("profile_updated", { detail: null }));
+
+              setTimeout(() => {
+                if (alive) nav("/", { replace: true });
+              }, 600);
+              return;
+            }
+
+            const msg = String(error.message || "").toLowerCase();
+
+            // keep polling while not confirmed yet
+            if (msg.includes("confirm") || msg.includes("not confirmed")) {
+              if (attempts >= maxAttempts) {
+                clearInterval(timer);
+                setStatus("Confirmed? Please click Continue to Home and log in.");
+              }
+              return;
+            }
+
+            // Any other error: stop polling (bad password, rate limit, etc.)
+            clearInterval(timer);
+            setStatus("Could not sign you in automatically. Please log in.");
+          } catch {
+            if (attempts >= maxAttempts) {
+              clearInterval(timer);
+              setStatus("Confirmed? Please click Continue to Home and log in.");
+            }
+          }
+        }, tickMs);
+
+        return () => clearInterval(timer);
       }
 
-
-      // If we DO have auth params, complete the login.
+      // CASE B: we DO have auth params (confirmation link opened on this same device)
       setStatus("Confirming your email…");
 
       // For PKCE links, exchange code for a session
@@ -60,10 +139,10 @@ export default function AuthCallback() {
       }
 
        if (data?.session) {
+        clearPendingSignup();
         setStatus("Email confirmed. You are now logged in.");
         setCanGoHome(true);
 
-        // Force MeContext to revalidate immediately
         window.dispatchEvent(new CustomEvent("profile_updated", { detail: null }));
 
         setTimeout(() => {

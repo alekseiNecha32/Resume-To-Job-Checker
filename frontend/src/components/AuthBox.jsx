@@ -46,12 +46,19 @@ export default function AuthBox({ onDone }) {
 
     // Email confirmations ON => session is null, show message + go to callback page
     if (!data?.session) {
+      // NEW: enable auto-login polling on /auth/callback
+      try {
+        sessionStorage.setItem(
+          "pendingSignup",
+          JSON.stringify({ email, password, ts: Date.now() })
+        );
+      } catch {}
+
       setInfo("Wait for confirmation email to confirm your email.");
       nav("/auth/callback");
       return;
     }
 
-    // Confirmations OFF => logged in immediately
     onDone?.();
   }
 
