@@ -21,14 +21,15 @@ export default function AuthBox({ onDone }) {
     if (error) setErr(error.message);
     else onDone?.();
   }
-  
 
-    async function signUp() {
+
+  async function signUp() {
     setErr("");
     setInfo("");
     setLoading(true);
 
-    const redirectTo = `${window.location.origin}/auth/callback`;
+    const redirectBase = import.meta.env.VITE_PUBLIC_SITE_URL || window.location.origin;
+    const redirectTo = `${redirectBase}/auth/callback`;
 
     const { data, error } = await supabase.auth.signUp({
       email,
