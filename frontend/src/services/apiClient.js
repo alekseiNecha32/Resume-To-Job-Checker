@@ -63,7 +63,7 @@ export async function smartAnalyze({ resumeText, jobText, jobTitle }) {
     method: "POST",
         headers: {
       ...headers,
-      "Content-Type": "application/json",   // <-- add this
+      "Content-Type": "application/json",  
       "Accept": "application/json"
     },
   

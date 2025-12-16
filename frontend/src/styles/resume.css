@@ -28,7 +28,7 @@
 }
 
 .ats-fit-value {
-  font-size: 20px;     /* was 32px */
+  font-size: 20px;
   font-weight: 800;
   color: #0f172a;
   min-width: 72px;
@@ -57,7 +57,7 @@
 
 .ats-sugg-title {
   margin: 0;
-  font-size: 27px;     /* was 15px */
+  font-size: 27px;
   font-weight: 800;
   color: #1f2937;
 }
@@ -67,7 +67,6 @@
   flex-wrap: wrap;
   gap: 8px;
 }
-/* ...existing code... */
 
 .ats-textarea {
   width: 100%;
@@ -111,11 +110,43 @@
   margin: 0;
 }
 
+.live-resume-box textarea,
+.live-resume-box [contenteditable="true"] {
+  overflow: hidden;
+  resize: none;
+}
+
+.live-resume-box textarea::-webkit-scrollbar,
+.live-resume-box [contenteditable="true"]::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+.live-resume-box textarea::-webkit-scrollbar-button,
+.live-resume-box [contenteditable="true"]::-webkit-scrollbar-button {
+  display: none;
+}
+
+.live-resume-box textarea,
+.live-resume-box [contenteditable="true"] {
+  scrollbar-width: none;
+}
+
+.live-resume-box input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+.live-resume-box input[type="number"]::-webkit-outer-spin-button,
+.live-resume-box input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
 .ats-download-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
-/* Optional: make wrapper spacing consistent */
+
 .ats-job-description-wrapper {
   display: flex;
   flex-direction: column;

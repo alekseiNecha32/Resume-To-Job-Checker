@@ -90,20 +90,20 @@ export default function ResumeConstructor() {
     const [rawResume, setRawResume] = useState("");
     const [resumeFile, setResumeFile] = useState(null);
     const [jobText, setJobText] = useState("");
-    const [jobTitle, setJobTitle] = useState("");        
+    const [jobTitle, setJobTitle] = useState("");
     const [resume, setResume] = useState(null);
     const [suggestions, setSuggestions] = useState([]);
     const [loading, setLoading] = useState(false);
     const [uploading, setUploading] = useState(false);
     const [error, setError] = useState(null);
     const resumeRef = useRef(null);
-    const fileInputRef = useRef(null);                   
-    const [downloading, setDownloading] = useState(false); 
+    const fileInputRef = useRef(null);
+    const [downloading, setDownloading] = useState(false);
     const { me, setMe } = useMe();
-    const [highlightedIds, setHighlightedIds] = useState([]); 
-    const [missingKeywords, setMissingKeywords] = useState([]); 
-    const [criticalGaps, setCriticalGaps] = useState([]);    
-    const [fitEstimate, setFitEstimate] = useState(null);         
+    const [highlightedIds, setHighlightedIds] = useState([]);
+    const [missingKeywords, setMissingKeywords] = useState([]);
+    const [criticalGaps, setCriticalGaps] = useState([]);
+    const [fitEstimate, setFitEstimate] = useState(null);
     const [presentSkills, setPresentSkills] = useState([]);
 
     const [extractedChars, setExtractedChars] = useState(0);
@@ -111,8 +111,8 @@ export default function ResumeConstructor() {
 
     const normalizeExtractedText = (text) => {
         return text
-            .replace(/^(%Ï\s*)+/gm, "")        
-            .replace(/^[•●▪·\-*]+\s+/gm, "");     
+            .replace(/^(%Ï\s*)+/gm, "")
+            .replace(/^[•●▪·\-*]+\s+/gm, "");
     };
 
     const handleFilePick = async (e) => {
@@ -439,6 +439,7 @@ export default function ResumeConstructor() {
                         </div>
                         <div
                             ref={resumeRef}
+                            className="live-resume-box"
                             style={{
                                 border: "1px solid #ddd",
                                 padding: "1rem",
