@@ -65,7 +65,7 @@ class SmartAdvice:
     rewrite_hints: List[str]
 
 def _embed(text: str):
-    model = get_emb()  # ✅ FIX
+    model = get_emb()
     return model.encode([text], normalize_embeddings=True)
 
 
@@ -77,7 +77,7 @@ def _sim(a: str, b: str) -> float:
 
 
 def _keybert_terms(text: str, top_n=12) -> List[str]:
-    kw = get_kw()  # ✅ FIX
+    kw = get_kw()
     terms = []
     for term, _ in kw.extract_keywords(text, top_n=top_n, stop_words="english"):
         term = normalize(term)
@@ -114,8 +114,6 @@ KEYWORD_FAMILIES: Dict[str, List[str]] = {
         "medidata rave",
         "rave edc",
     ],
-    # Add other *specific* products only if you see repeated unsafe suggestions:
-    # "edc_other": ["oracle siebel clinical", "inform", "veeva vault cdms", "redcap"],
 }
 _GENERIC_EVIDENCE_TOKENS = {
     # Tokens that are too generic to count as evidence for domain-specific claims
@@ -162,7 +160,7 @@ def _top_job_phrases(job_text: str, resume_text: str, top_k: int = 40) -> List[s
 def _sem_not_covered(phrases: List[str], resume_text: str, thr: float = 0.78) -> List[str]:
     if not phrases:
         return []
-    model = get_emb()  # ✅ FIX
+    model = get_emb()
     res_vec = model.encode([resume_text], normalize_embeddings=True)[0]
     ph_vecs = model.encode(phrases, normalize_embeddings=True)
     res_n = np.linalg.norm(res_vec) + 1e-12
@@ -178,7 +176,7 @@ def _cluster_themes(phrases: List[str], max_k: int = 4) -> Dict[str, List[str]]:
         return {}
     if len(phrases) <= 6:
         return {phrases[0]: phrases}
-    model = get_emb()  # ✅ FIX
+    model = get_emb()
     V = model.encode(phrases, normalize_embeddings=True)
     k = min(max_k, max(2, len(phrases) // 6))
     km = KMeans(n_clusters=k, n_init="auto", random_state=42)
@@ -222,7 +220,7 @@ def _unsafe_family_for_phrase(phrase: str, resume_text_norm: str) -> bool:
 def _expand_to_canon(terms: List[str]) -> List[str]:
     if not terms:
         return []
-    model = get_emb()  # ✅ FIX
+    model = get_emb()
     e_can = model.encode(CANON_SKILLS, normalize_embeddings=True)
     e_terms = model.encode(terms, normalize_embeddings=True)
     sims = util.cos_sim(e_terms, e_can)

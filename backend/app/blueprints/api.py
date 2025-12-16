@@ -228,23 +228,6 @@ def score_resume_to_job():
 
     similarity = round(coverage, 4)
 
-    # ✅ ADD SEMANTIC SCORING HERE (optional)
-    # try:
-    #     model = get_sbert_model()
-    #     resume_emb = model.encode(resume_text, convert_to_tensor=True, normalize_embeddings=True)
-    #     job_emb = model.encode(job_text, convert_to_tensor=True, normalize_embeddings=True)
-    #     semantic_score = float(util.pytorch_cos_sim(resume_emb, job_emb)[0][0])
-        
-    #     # Blend keyword score (60%) + semantic (40%)
-    #     final_score = int(round(score * 0.6 + semantic_score * 100 * 0.4))
-    # except Exception as e:
-    #     print(f"Semantic scoring failed: {e}")
-    #     final_score = score
-
-
-
-
-
     return jsonify({
         "model": "simple-keyword-v1",
         "similarity": similarity,

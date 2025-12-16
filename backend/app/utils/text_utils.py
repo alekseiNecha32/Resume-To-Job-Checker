@@ -31,7 +31,7 @@ def chunk_text(text: str, max_chars: int = 1000):
 def embed_text(text: str) -> np.ndarray:
     """Embed possibly long text safely."""
     try:
-        model = get_model()  # ✅ Lazy load
+        model = get_model()
         chunks = chunk_text(text)
         if not chunks:
             return np.zeros((model.get_sentence_embedding_dimension(),), dtype=np.float32)

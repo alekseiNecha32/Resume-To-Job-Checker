@@ -38,8 +38,8 @@ const parseResume = (text) => {
 
     const name = lines[0] || "";
     const contact = [];
-    if (lines[2]) contact.push(lines[2]); // Cincinnati, OH ...
-    if (lines[1]) contact.push(lines[1]); // GitHub / LinkedIn
+    if (lines[2]) contact.push(lines[2]);
+    if (lines[1]) contact.push(lines[1]);
 
     const bodyLines = lines.slice(3);
 
@@ -90,20 +90,20 @@ export default function ResumeConstructor() {
     const [rawResume, setRawResume] = useState("");
     const [resumeFile, setResumeFile] = useState(null);
     const [jobText, setJobText] = useState("");
-    const [jobTitle, setJobTitle] = useState("");        // NEW
+    const [jobTitle, setJobTitle] = useState("");        
     const [resume, setResume] = useState(null);
     const [suggestions, setSuggestions] = useState([]);
     const [loading, setLoading] = useState(false);
     const [uploading, setUploading] = useState(false);
     const [error, setError] = useState(null);
     const resumeRef = useRef(null);
-    const fileInputRef = useRef(null);                   // NEW
-    const [downloading, setDownloading] = useState(false); // ⭐ YOU MUST ADD THIS
+    const fileInputRef = useRef(null);                   
+    const [downloading, setDownloading] = useState(false); 
     const { me, setMe } = useMe();
-    const [highlightedIds, setHighlightedIds] = useState([]); // NEW
-    const [missingKeywords, setMissingKeywords] = useState([]); // NEW
-    const [criticalGaps, setCriticalGaps] = useState([]);       // NEW
-    const [fitEstimate, setFitEstimate] = useState(null);          // NEW
+    const [highlightedIds, setHighlightedIds] = useState([]); 
+    const [missingKeywords, setMissingKeywords] = useState([]); 
+    const [criticalGaps, setCriticalGaps] = useState([]);    
+    const [fitEstimate, setFitEstimate] = useState(null);         
     const [presentSkills, setPresentSkills] = useState([]);
 
     const [extractedChars, setExtractedChars] = useState(0);
@@ -111,8 +111,8 @@ export default function ResumeConstructor() {
 
     const normalizeExtractedText = (text) => {
         return text
-            .replace(/^(%Ï\s*)+/gm, "")          // remove %Ï at line start
-            .replace(/^[•●▪·\-*]+\s+/gm, "");     // remove bullet chars at line start
+            .replace(/^(%Ï\s*)+/gm, "")        
+            .replace(/^[•●▪·\-*]+\s+/gm, "");     
     };
 
     const handleFilePick = async (e) => {

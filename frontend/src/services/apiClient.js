@@ -94,7 +94,7 @@ export async function smartAnalyze({ resumeText, jobText, jobTitle }) {
 export async function getMe() {
   const headers = await authHeaders();
   const r = await fetch(`${API_BASE}/me`, { headers });
-  if (r.status === 404) return null; // tolerate missing during deploy
+  if (r.status === 404) return null;
   const ct = r.headers.get("content-type") || "";
   const data = ct.includes("application/json") ? await r.json() : {};
   if (!r.ok) throw new Error(data?.error || `me failed (${r.status})`);
@@ -109,7 +109,7 @@ export async function updateProfile({ avatarFile } = {}) {
 
   const res = await fetch(`${API_BASE}/profile`, {
     method: "POST",
-    headers, // no Content-Type; let browser set multipart/form-data
+    headers,
     body: fd
   });
 
@@ -163,8 +163,6 @@ export async function downloadOptimizedResumeDocx(resume) {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      // If you use Supabase auth, you can also send token here:
-      // ...(token && { Authorization: `Bearer ${token}` }),
     },
     body: JSON.stringify({ resume }),
   });
@@ -174,7 +172,7 @@ export async function downloadOptimizedResumeDocx(resume) {
     throw new Error(`Failed to export DOCX: ${res.status} ${text}`);
   }
 
-  return await res.blob(); // .docx file contents
+  return await res.blob();
 }
 
 export async function apiCall(endpoint, options = {}) {

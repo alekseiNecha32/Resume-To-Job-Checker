@@ -194,7 +194,7 @@ def update_profile():
         resp = Response(response=payload, status=200, mimetype="application/json")
         resp.headers["Content-Type"] = "application/json; charset=utf-8"
         resp.headers["Content-Length"] = str(len(payload))
-        return resp  # ✅ IMPORTANT: return the response
+        return resp
 
     except Exception as e:
         logger.error(f"update_profile error: {e}", exc_info=True)

@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 import logging
 import json
 from uuid import uuid4 
-from app.services.suggestion_safety import enforce_no_fake_metrics  # NEWenforce_no_fake_metrics
+from app.services.suggestion_safety import enforce_no_fake_metrics
 
 smart_bp = Blueprint("smart", __name__, url_prefix="/api/smart")
 logger = logging.getLogger(__name__)
@@ -38,7 +38,7 @@ def suggest():
     body = request.get_json(force=True) or {}
     resume = body.get("resume") or {}
     job_text = (body.get("jobText") or "")[:4000]
-    resume_text = _resume_json_to_text(resume)  # NEW
+    resume_text = _resume_json_to_text(resume)
 
     def fallback_list():
         sections = resume.get("sections") or []
@@ -68,7 +68,6 @@ def suggest():
                 "suggestedText": "Built role-based dashboard reducing manual status pings by 80%.",
                 "reason": "Shows relevant ownership and delivery."
             },
-            # NEW: two extra fallback suggestions (kept simple)
             {
                 "id": f"add2-{uuid4()}",
                 "type": "add_bullet",
@@ -131,7 +130,7 @@ JSON only.
             suggestions = suggestions[:5]
     except Exception as e:
         logger.warning("suggest fallback: %s", e)
-        suggestions = enforce_no_fake_metrics(fallback_list(), resume_text)  # NEW
+        suggestions = enforce_no_fake_metrics(fallback_list(), resume_text)
 
     return jsonify({"suggestions": suggestions})
 
@@ -214,12 +213,11 @@ def analyze():
         rewrite_hints = res.rewrite_hints or []
 
         suggestions_text = None
-        lego_resume = None       # === LEGO BLOCKS ===
-        lego_suggestions = None  # === LEGO BLOCKS ===
+        lego_resume = None
+        lego_suggestions = None
         client = current_app.config.get("OPENAI_CLIENT")
         
         if client and res:
-            # === LEGO BLOCKS: new JSON-based prompt for “Lego” UI ===
             prompt = f"""
 You are an ATS expert and resume editor.
 

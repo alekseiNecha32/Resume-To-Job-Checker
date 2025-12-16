@@ -22,8 +22,8 @@ export default function AvatarUploader({ onDone }) {
       // ✅ Use apiCall directly (don't use apiCallWithAuth which adds JSON header)
       const resp = await apiCall("/profile", {
         method: "POST",
-        headers: { "Authorization": `Bearer ${token}` },  // ✅ Add auth manually
-        body: form  // ✅ FormData - no Content-Type header needed
+        headers: { "Authorization": `Bearer ${token}` },
+        body: form
       });
 
 

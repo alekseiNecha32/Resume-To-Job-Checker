@@ -35,7 +35,7 @@ def export_resume_docx():
         p.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
         p.add_run(line)
 
-    doc.add_paragraph("")  # spacer
+    doc.add_paragraph("")
 
     # ===== SECTIONS =====
     for section in resume.get("sections", []):

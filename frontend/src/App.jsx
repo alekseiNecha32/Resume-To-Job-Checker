@@ -1,4 +1,3 @@
-// import Analyze from "./pages/Analyze.jsx";
 import "./styles/global.css";
 import { BrowserRouter as Router, Route, Routes } from "react-router-dom";
 import NavBar from "./components/Navbar.jsx";
@@ -6,7 +5,7 @@ import PaySuccess from "./components/PaySuccess";
 import { MeProvider } from "./context/MeContext.jsx";
 import PayCancel from "./components/PayCancel.jsx";
 import ResumeConstructor from "./components/ResumeConstructor.jsx";
-import AuthCallback from "./services/AuthCallback.jsx"; // NEW
+import AuthCallback from "./services/AuthCallback.jsx";
 
 export default function App() {
    return (
