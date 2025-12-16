@@ -6,6 +6,8 @@ from dotenv import load_dotenv
 import logging
 import json
 from uuid import uuid4 
+from app.services.suggestion_safety import enforce_no_fake_metrics  # NEWenforce_no_fake_metrics
+
 smart_bp = Blueprint("smart", __name__, url_prefix="/api/smart")
 logger = logging.getLogger(__name__)
 
@@ -13,16 +15,32 @@ def get_user_id():
     return request.headers.get("X-User-Id")
 
 
- # add this near other imports
-# ...existing code...
+
+def _resume_json_to_text(resume_json: dict) -> str:
+    """
+    Best-effort flattening for metric safety checks.
+    """
+    if not isinstance(resume_json, dict):
+        return ""
+    parts = []
+    for sec in (resume_json.get("sections") or []):
+        title = sec.get("title")
+        if title:
+            parts.append(str(title))
+        for it in (sec.get("items") or []):
+            txt = it.get("text") if isinstance(it, dict) else None
+            if txt:
+                parts.append(str(txt))
+    return "\n".join(parts)
 
 @smart_bp.post("/suggest")
 def suggest():
     body = request.get_json(force=True) or {}
     resume = body.get("resume") or {}
     job_text = (body.get("jobText") or "")[:4000]
+    resume_text = _resume_json_to_text(resume)  # NEW
 
-    def fallback():
+    def fallback_list():
         sections = resume.get("sections") or []
         first_sec = sections[0] if sections else {}
         first_item = (first_sec.get("items") or [None])[0]
@@ -50,38 +68,70 @@ def suggest():
                 "suggestedText": "Built role-based dashboard reducing manual status pings by 80%.",
                 "reason": "Shows relevant ownership and delivery."
             },
+            # NEW: two extra fallback suggestions (kept simple)
+            {
+                "id": f"add2-{uuid4()}",
+                "type": "add_bullet",
+                "targetSectionId": first_sec.get("id", "experience"),
+                "suggestedText": "Automated recurring reporting tasks with scripts and scheduling to reduce manual effort.",
+                "reason": "Adds concrete automation impact without inventing numbers."
+            },
+            {
+                "id": f"proj2-{uuid4()}",
+                "type": "project_idea",
+                "targetSectionId": "projects",
+                "suggestedText": "Monitoring mini-project: add structured logs, dashboards, and alert thresholds for a small API.",
+                "reason": "Demonstrates reliability/observability skills."
+            },
         ]
 
     client = current_app.config.get("OPENAI_CLIENT")
     if not client:
-        return jsonify({"suggestions": fallback()})
+        suggestions = enforce_no_fake_metrics(fallback_list(), resume_text)  # NEW
+        return jsonify({"suggestions": suggestions})
 
     prompt = f"""
 You generate resume edit suggestions.
+
 Resume JSON: {resume}
 Job: {job_text}
-Return JSON array of 3 suggestions.
+
+Return JSON array of 5 suggestions.
+
+Hard rules:
+- Do NOT invent numbers/metrics. Only use numbers if they already appear somewhere in the Resume JSON.
+  If no numbers exist in the resume, write impact without numbers (e.g., "helped reduce", "aimed to improve").
+- Do NOT claim experience with tools/terms not evidenced in the resume. If not evidenced, phrase as learning/familiarity/interest.
+
 Each object:
 - id: string
 - type: add_bullet | rewrite_bullet | project_idea
 - targetSectionId: existing section id or "projects"
 - targetItemId: only for rewrite_bullet
 - originalText: for rewrite_bullet
-- suggestedText: concise, metric-focused
+- suggestedText: concise, hard-skill focused
 - reason: short reason
 JSON only.
-"""
+""".strip()
+
     try:
         completion = client.responses.create(
             model="gpt-4.1-mini",
             input=[{"role": "user", "content": prompt}],
-            max_output_tokens=800,
+            max_output_tokens=1200,
         )
         raw = completion.output[0].content[0].text
         suggestions = json.loads(raw)
+
+        # NEW: enforce metric safety deterministically server-side
+        suggestions = enforce_no_fake_metrics(suggestions, resume_text)
+
+        # Optional guard: keep at most 5
+        if isinstance(suggestions, list):
+            suggestions = suggestions[:5]
     except Exception as e:
         logger.warning("suggest fallback: %s", e)
-        suggestions = fallback()
+        suggestions = enforce_no_fake_metrics(fallback_list(), resume_text)  # NEW
 
     return jsonify({"suggestions": suggestions})
 
@@ -169,7 +219,7 @@ def analyze():
         client = current_app.config.get("OPENAI_CLIENT")
         
         if client and res:
-                    # === LEGO BLOCKS: new JSON-based prompt for “Lego” UI ===
+            # === LEGO BLOCKS: new JSON-based prompt for “Lego” UI ===
             prompt = f"""
 You are an ATS expert and resume editor.
 
@@ -179,6 +229,9 @@ IMPORTANT RULES:
 - Focus on things like programming languages, frameworks, libraries, tools, cloud, testing, automation, CI/CD, data/ML.
 - IGNORE soft skills like communication, teamwork, cross time zone collaboration, leadership, culture fit, etc.
 - Do not suggest generic “team player”, “strong communication”, “fast learner”, etc.
+- Do NOT invent numbers/metrics. Only use numbers if they already appear in the resume text.
+  If the resume contains no numbers, write impact without numbers (e.g., "helped reduce", "aimed to improve").
+- Do NOT claim experience with tools/terms not evidenced in the resume. If not evidenced, phrase as learning/familiarity/interest.
 
 Context:
 Job Title: {job_title}
@@ -216,46 +269,26 @@ Return a SINGLE JSON object with this structure:
           }}
         ]
       }}
-      // Include other sections like "skills", "projects", "education" if they exist.
     ]
   }},
 
   "suggestions": [
     {{
       "id": "s1",
-      "type": "add_bullet",  // one of: "add_bullet", "rewrite_bullet", "project_idea"
-      "targetSectionId": "experience",  // e.g. "experience", "skills", "projects"
-      "targetItemId": null,            // for add_bullet or project_idea this can be null/omitted
-      "title": "Add impact-focused React testing bullet",
-      "originalText": null,            // ONLY used for type="rewrite_bullet"
-      "suggestedText": "Improved Playwright end-to-end coverage from 60% to 90% for admin flows, reducing regressions by 30%.",
-      "reason": "Adds a quantified impact for your testing work."
-    }},
-    {{
-      "id": "s2",
-      "type": "rewrite_bullet",
+      "type": "add_bullet",
       "targetSectionId": "experience",
-      "targetItemId": "exp-1",        // must reference an item id from structuredResume.sections[].items[].id
-      "title": "Rewrite for clarity and impact",
-      "originalText": "Developed React components for internal dashboard.",
-      "suggestedText": "Built reusable React components for an internal dashboard used by 3+ teams, reducing UI bugs by 25%.",
-      "reason": "Shows scale of usage and measurable benefit."
-    }},
-    {{
-      "id": "s3",
-      "type": "project_idea",
-      "targetSectionId": "projects",
       "targetItemId": null,
-      "title": "Accessibility map mini project",
+      "title": "Add hard-skill impact bullet",
       "originalText": null,
-      "suggestedText": "Accessibility Map – Built a web app that lets wheelchair users rate campus building accessibility using React, .NET, and map APIs.",
-      "reason": "Demonstrates accessibility passion and your full-stack skills."
+      "suggestedText": "Built CI checks for a .NET API using GitHub Actions to improve release confidence and reduce regressions.",
+      "reason": "Adds concrete tooling and delivery signals without inventing metrics."
     }}
   ]
 }}
 
 Requirements:
-- suggestions[].id must be unique simple strings like "s1", "s2", "s3".
+- Return EXACTLY 5 suggestions in suggestions[] (s1..s5).
+- suggestions[].id must be unique simple strings like "s1", "s2", "s3", "s4", "s5".
 - structuredResume.sections[].items[].id must be unique and used in suggestions[].targetItemId for rewrite_bullet.
 - All suggestions must be about HARD TECHNICAL improvements, not soft skills.
 - Return ONLY valid JSON with no comments.
@@ -273,6 +306,11 @@ Requirements:
                 suggestions_text = model_payload.get("personalSuggestionsText")
                 lego_resume = model_payload.get("structuredResume")
                 lego_suggestions = model_payload.get("suggestions")
+
+                # NEW: enforce metric safety + cap to 5
+                if isinstance(lego_suggestions, list):
+                    lego_suggestions = enforce_no_fake_metrics(lego_suggestions, resume_text)
+                    lego_suggestions = lego_suggestions[:5]
 
             except Exception as e:
                 logger.warning(f"OpenAI suggestions (Lego) failed: {e}")
@@ -345,54 +383,4 @@ Requirements:
         logger.error(f"smart_analyze error: {e}", exc_info=True)
         return jsonify({"error": str(e), "type": type(e).__name__}), 500
                     
-    #     if res is None:
-    #         return jsonify({"error": "Analysis failed - returned None"}), 500
-
-    #     # Deduct credits
-    #     try:
-    #         supabase.table("profiles").update({"credits": credits - 1}).eq("user_id", uid).execute()
-    #     except Exception as e:
-    #         logger.error(f"Failed to deduct credits: {e}")
-    #         # Don't fail - user already got analysis
-    #         pass
-
-    #     # Save to DB
-    #     try:
-    #         supabase.table("analyses").insert({
-    #             "user_id": uid,
-    #             "job_title": d.get("job_title", ""),
-    #             "fit_estimate": res.fit_estimate,
-    #             "payload": {
-    #                 "fit_estimate": res.fit_estimate,
-    #                 "similarity_resume_job": res.sim_resume_jd,
-    #                 "present_skills": res.present_skills,
-    #                 "missing_skills": res.missing_skills,
-    #                 "critical_gaps": res.critical_gaps,
-    #                 "section_suggestions": res.section_suggestions,
-    #                 "ready_bullets": res.ready_bullets,
-    #                 "rewrite_hints": res.rewrite_hints,
-    #             },
-    #             "resume_excerpt": d.get("resume_text", "")[:300]
-    #         }).execute()
-    #     except Exception as e:
-    #         logger.error(f"Failed to save analysis: {e}")
-    #         # Don't fail - analysis is done
-
-    #     logger.info(f"smart_analyze uid={uid} fit={res.fit_estimate} missing={len(res.missing_skills)}")
-
-    #     return jsonify({
-    #         "fit_estimate": res.fit_estimate,
-    #         "similarity_resume_job": res.sim_resume_jd,
-    #         "present_skills": res.present_skills,
-    #         "missing_skills": res.missing_skills,
-    #         "critical_gaps": res.critical_gaps,
-    #         "section_suggestions": res.section_suggestions,
-    #         "ready_bullets": res.ready_bullets,
-    #         "rewrite_hints": res.rewrite_hints,
-    #         "remaining_credits": credits - 1
-    #     }), 200
-
-    # except Exception as e:
-    #     logger.error(f"smart_analyze error: {e}", exc_info=True)
-    #     return jsonify({"error": str(e), "type": type(e).__name__}), 500                
-       
+   

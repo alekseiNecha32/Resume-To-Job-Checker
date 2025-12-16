@@ -107,7 +107,22 @@ NOISE_SUBSTRINGS = [
     # misc non-actionable
     "country qualifications", "must be able", "strong communication", "fast-paced", "self-starter"
 ]
-
+KEYWORD_FAMILIES: Dict[str, List[str]] = {
+    "edc_medidata_rave": [
+        "medidata",
+        "rave",
+        "medidata rave",
+        "rave edc",
+    ],
+    # Add other *specific* products only if you see repeated unsafe suggestions:
+    # "edc_other": ["oracle siebel clinical", "inform", "veeva vault cdms", "redcap"],
+}
+_GENERIC_EVIDENCE_TOKENS = {
+    # Tokens that are too generic to count as evidence for domain-specific claims
+    "database", "databases", "system", "systems", "platform", "service", "services",
+    "application", "applications", "api", "apis", "security", "secure", "compliance",
+    "compliant", "standards", "industry", "requirements", "data", "information"
+}
 def _is_noisy_phrase(p: str) -> bool:
     p_l = p.lower().strip()
     if len(p_l) <= 2:
@@ -177,6 +192,33 @@ def _cluster_themes(phrases: List[str], max_k: int = 4) -> Dict[str, List[str]]:
         groups[rep] = [phrases[i] for i in idxs]
     return groups
 
+def _has_term(haystack_norm: str, term_norm: str) -> bool:
+    if not haystack_norm or not term_norm:
+        return False
+    pat = r"(?<![a-z0-9])" + re.escape(term_norm) + r"(?![a-z0-9])"
+    return re.search(pat, haystack_norm) is not None
+
+def _resume_has_family(resume_text_norm: str, family_terms: List[str]) -> bool:
+    if not resume_text_norm:
+        return False
+    for t in family_terms:
+        t_n = normalize(t)
+        if t_n and _has_term(resume_text_norm, t_n):
+            return True
+    return False
+
+def _unsafe_family_for_phrase(phrase: str, resume_text_norm: str) -> bool:
+    p = normalize(phrase or "")
+    if not p:
+        return False
+
+    for _, terms in KEYWORD_FAMILIES.items():
+        mentions_family = any(_has_term(p, normalize(t)) for t in terms if t)
+        if mentions_family:
+            return not _resume_has_family(resume_text_norm, terms)
+
+    return False
+
 def _expand_to_canon(terms: List[str]) -> List[str]:
     if not terms:
         return []
@@ -229,6 +271,52 @@ def _extract_action_verbs(text: str):
     return sorted(picked)
 
 
+def _resume_mentions_phrase(resume_text_norm: str, phrase: str) -> bool:
+    """
+    Conservative check: if the resume doesn't literally mention the phrase (or close token),
+    treat it as not-evidenced (avoid claiming experience).
+    """
+    if not resume_text_norm or not phrase:
+        return False
+
+    p = normalize(phrase)
+    if not p:
+        return False
+
+    # Direct phrase match
+    if _has_term(resume_text_norm, p):
+        return True
+
+    toks_all = [t for t in re.split(r"\s+", p) if t]
+    toks = [
+        t for t in toks_all
+        if len(t) >= 4 and t not in _GENERIC_EVIDENCE_TOKENS
+    ]
+
+    if not toks:
+        return False
+
+    hits = sum(1 for t in toks if _has_term(resume_text_norm, t))
+
+    # For multi-token concepts, require >=2 meaningful hits when possible
+    if len(toks) >= 2:
+        return hits >= 2
+
+    return hits >= 1
+
+def _should_soften_claim(phrase: str, resume_text_norm: str) -> bool:
+    """
+    True => do not generate/apply "experience" phrasing for this phrase.
+    We soften if:
+      - it belongs to a family not in resume (your existing rule), OR
+      - it's not evidenced in the resume at all (general anti-hallucination rule).
+    """
+    if not phrase:
+        return False
+    if _unsafe_family_for_phrase(phrase, resume_text_norm):
+        return True
+    return not _resume_mentions_phrase(resume_text_norm, phrase)
+
 def _compose_auto_suggestions(job_text: str, resume_text: str,
                               present_skills: List[str], missing_skills: List[str],
                               job_title: str) -> Tuple[Dict[str, List[str]], List[str]]:
@@ -237,48 +325,82 @@ def _compose_auto_suggestions(job_text: str, resume_text: str,
     missing_phr = _sem_not_covered(top, resume_text, thr=0.78)
     themes = _cluster_themes(missing_phr, max_k=4)
 
+    resume_norm = normalize(resume_text or "")
+
     exp: List[str] = []
     for rep, items in list(themes.items())[:4]:
         if _is_noisy_phrase(rep):
             continue
         exemplars = [w for w in items if w != rep][:2]
-        if exemplars:
+
+        # NEW: soften if not evidenced OR unsafe family
+        unsafe = _should_soften_claim(rep, resume_norm) or any(
+            _should_soften_claim(x, resume_norm) for x in exemplars
+        )
+
+        if unsafe:
+            ex_txt = f" (e.g., {', '.join(exemplars)})" if exemplars else ""
             exp.append(
-                f"Add a results‑driven bullet illustrating **{rep}** (e.g., {', '.join(exemplars)}) and quantify impact."
+                f"If you haven’t actually used **{rep}**, don’t write it as experience. "
+                f"Instead, phrase it as **learning/familiarity/interest**{ex_txt} (e.g., "
+                f"“Currently learning {rep}”, “Familiar with concepts”, “Interested in working with {rep}”), "
+                f"or add it under a **Training/Projects** section."
             )
         else:
-            exp.append(
-                f"Add a concise bullet demonstrating **{rep}** with a clear metric (%, ms, errors reduced) and the business/context outcome."
-            )
+            if exemplars:
+                exp.append(
+                    f"Add a results‑driven bullet illustrating **{rep}** (e.g., {', '.join(exemplars)}) and quantify impact."
+                )
+            else:
+                exp.append(
+                    f"Add a concise bullet demonstrating **{rep}** with a clear metric (%, ms, errors reduced) and the business/context outcome."
+                )
 
     prj: List[str] = []
     top_keys = [k for k in list(themes.keys()) if not _is_noisy_phrase(k)][:3]
+
+    # NEW: consider "not evidenced" as unsafe too
+    any_unsafe_top = any(_should_soften_claim(k, resume_norm) for k in top_keys)
+
     if top_keys:
-        prj.append(
-            "Deliver a focused side project applying "
-            + ", ".join(top_keys)
-            + "; document architecture, automated tests, deployment steps, and 1–2 key metrics (e.g., response time, accuracy)."
-        )
+        if any_unsafe_top:
+            prj.append(
+                "For JD tools/terms not present in your resume, add an honest learning project/training entry to build credibility around: "
+                + ", ".join(top_keys)
+                + " (avoid implying production experience)."
+            )
+        else:
+            prj.append(
+                "Deliver a focused side project applying "
+                + ", ".join(top_keys)
+                + "; document architecture, automated tests, deployment steps, and 1–2 key metrics (e.g., response time, accuracy)."
+            )
 
     strengths = present_skills[:2]
     mix_list = (top_keys + strengths)[:3]
     mix = ", ".join(mix_list) if mix_list else "core technologies for the role"
     title_txt = job_title or "the target role"
     summ = [
-        f"Craft a professional 2–3 line summary tailored to **{title_txt}**, highlighting {mix} and a quantified accomplishment (e.g., reduced build time 30%, improved model accuracy 12pp)."
+        f"Craft a professional 2–3 line summary tailored to **{title_txt}**, highlighting {mix} and a quantified accomplishment."
     ]
 
     bullets: List[str] = []
     if top_keys:
-        bullets.append(
-            f"Implemented {top_keys[0]} solution improving a key metric by Z% (define metric: latency, reliability, conversion) while ensuring maintainable code and test coverage."
-        )
+        first = top_keys[0]
+        if _should_soften_claim(first, resume_norm):
+            bullets.append(
+                f"Currently learning / building familiarity with **{first}** through projects or coursework (avoid claiming hands‑on experience unless it’s true)."
+            )
+        else:
+            bullets.append(
+                f"Implemented {first} solution improving a key metric by Z% (define metric: latency, reliability, conversion) while ensuring maintainable code and test coverage."
+            )
+
     bullets.append(
         "Structure each bullet: Action verb + Technology + Metric + Business/quality outcome (omit filler; keep to one sentence)."
     )
 
     return {"Summary": summ, "Experience": exp, "Projects": prj}, bullets
-
 
 def smart_predict_resume_improvements(resume_text: str, job_text: str, job_title: str = "") -> SmartAdvice:
     r = normalize(resume_text); j = normalize(job_text); t = normalize(job_title or "")
