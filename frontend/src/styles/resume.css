@@ -13,7 +13,7 @@
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 14px;
   margin-bottom: 16px;
-  margin-top: 23px;
+  margin-top: 47px;
 }
 
 .ats-fit-card {
