@@ -309,7 +309,7 @@ export default function ResumeConstructor() {
             <div className="ats-main-card">
                 <div className="ats-header-row">
                     <div>
-                        <h1 className="ats-heading">Resume ATS Checker</h1>
+                        <h1 className="ats-heading">Resume Constructor</h1>
                         <p className="ats-subtext">
                             Optimize your resume to match job requirements and pass ATS systems.
                         </p>

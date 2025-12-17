@@ -123,8 +123,8 @@ export default function NavBar() {
         <div className="rtjc-brand">
           <div className="rtjc-logo">🔍</div>
           <div>
-            <div className="rtjc-title">Resume to Job Checker</div>
-            <div className="rtjc-sub">Optimize your resume for ATS</div>
+            <div className="rtjc-title">Resume Constructor</div>
+            <div className="rtjc-sub">Version control for your resume: save versions, apply AI rewrites, and track changes.</div>
           </div>
         </div>
         <div className="rtjc-nav-links">

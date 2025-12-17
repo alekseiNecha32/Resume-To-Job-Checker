@@ -70,7 +70,7 @@ export default function CreditsModal({ onClose }) {
           <div>
             <h2 className="text-xl font-semibold">Buy Smart Analysis Credits</h2>
             <p className="mt-1 text-sm text-gray-500">
-              Unlock Pro smart analysis (critical gaps + matching/missing keywords) and get 3 live AI suggestions
+              Unlock Pro smart analysis (critical gaps + matching/missing keywords) and get 5 live AI suggestions
               inside the Resume Constructor to add, or reject while you build. Also you can download file to make additional edits.
             </p>
           </div>
