@@ -28,7 +28,10 @@ def create_app():
             "origins": [
                 "http://localhost:5173",
                 "http://127.0.0.1:5173",
-                "https://resume-to-job-checker-5.onrender.com" 
+                "https://resume-to-job-checker-5.onrender.com",
+                "https://www.resume-constructor.com",
+                "https://resume-constructor.com",
+                
                
             ],
             "supports_credentials": True,
