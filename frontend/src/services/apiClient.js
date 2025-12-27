@@ -6,7 +6,7 @@ const PROD = import.meta.env.VITE_API_URL_Prod;
 export const API_BASE =
   import.meta.env.MODE === "development"
     ? (DEV || "http://127.0.0.1:5000/api")
-    : (PROD || "https://resume-tojob.onrender.com/api");
+    : (PROD || "https://api.resume-constructor.com/api");
 
 if (typeof window !== "undefined") window.API_BASE = API_BASE;
 
