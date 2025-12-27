@@ -1,14 +1,10 @@
 import numpy as np
-from sentence_transformers import SentenceTransformer
-
-_model = None
+from app.utils.embeddings import get_embedder
 
 def get_model():
-    global _model
-    if _model is None:
-        print("Loading MiniLM for text_utils...")
-        _model = SentenceTransformer("all-MiniLM-L6-v2")
-    return _model
+    # keep same function name so the rest of the file doesn't change
+    return get_embedder()
+
 
 
 

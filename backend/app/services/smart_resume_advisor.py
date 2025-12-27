@@ -3,7 +3,9 @@ from typing import List, Dict, Tuple
 import re
 
 import numpy as np
-from sentence_transformers import SentenceTransformer, util
+from sentence_transformers import util
+from app.utils.embeddings import get_embedder
+
 from keybert import KeyBERT
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.cluster import KMeans
@@ -16,19 +18,14 @@ _EMB = None
 _KW = None
 
 def get_emb():
-    global _EMB
-    if _EMB is None:
-        print("Loading MiniLM embedder...")
-        _EMB = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
-    return _EMB
+    return get_embedder()
 
 def get_kw():
     global _KW
     if _KW is None:
-        print("Loading KeyBERT...")
-        _KW = KeyBERT(model="all-MiniLM-L6-v2")
+        print("Loading KeyBERT (shared model)...")
+        _KW = KeyBERT(model=get_emb())
     return _KW
-
 
 CANON_SKILLS = [
     "python","java","c#","javascript","typescript","react","node.js","asp.net",

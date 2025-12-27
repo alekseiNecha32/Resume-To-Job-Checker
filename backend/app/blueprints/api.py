@@ -3,28 +3,16 @@ from flask import Blueprint, request, jsonify
 from werkzeug.exceptions import BadRequest
 from app.utils.extractors import extract_any, sniff_ext
 
-from sentence_transformers import SentenceTransformer, util
+from app.utils.embeddings import get_embedder
 import os
 import logging
 logger = logging.getLogger(__name__)
 # Global model cache - load only once
-_SBERT = None
 
 def get_sbert_model():
-    """Lazy load SentenceTransformer to avoid memory issues"""
-    global _SBERT
-    if _SBERT is None:
-        print("🔄 Loading SentenceTransformer model (first request)...")
-        try:
-            _SBERT = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
-            # Warmup
-            _ = _SBERT.encode("warmup", convert_to_tensor=True, normalize_embeddings=True)
-            print("✅ Model loaded successfully")
-        except Exception as e:
-            print(f"❌ Failed to load model: {e}")
-            _SBERT = None
-            raise
-    return _SBERT
+    """Get shared embedder (loaded once per process)"""
+    return get_embedder()
+
 
 api_bp = Blueprint("api", __name__, url_prefix="/api")
 
