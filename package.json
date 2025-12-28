@@ -1,0 +1,14 @@
+{
+  "name": "resume-to-job-checker",
+  "version": "1.0.0",
+  "description": "Optimize a resume against a job description. The app extracts hard technical skills, computes a fit estimate using MiniLM, and generates concise “Personal Suggestions” via OpenAI (gpt-4.1-mini). Smart Analysis consumes 1 credit.",
+  "main": "index.js",
+  "scripts": {},
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@playwright/test": "^1.57.0",
+    "@types/node": "^25.0.3"
+  }
+}
