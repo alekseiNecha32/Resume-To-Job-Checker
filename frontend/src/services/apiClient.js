@@ -190,3 +190,45 @@ export async function apiCallWithAuth(endpoint, token, options = {}) {
     }
   });
 }
+
+export async function getSubscription() {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_BASE}/payments/subscription`, { headers });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || `Failed to get subscription (${res.status})`);
+  return data;
+}
+
+export async function cancelSubscription() {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_BASE}/payments/subscription/cancel`, {
+    method: "POST",
+    headers,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.message || data?.error || `Failed to cancel subscription (${res.status})`);
+  return data;
+}
+
+export async function reactivateSubscription() {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_BASE}/payments/subscription/reactivate`, {
+    method: "POST",
+    headers,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.message || data?.error || `Failed to reactivate subscription (${res.status})`);
+  return data;
+}
+
+export async function syncSubscription(sessionId) {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_BASE}/payments/subscription/sync`, {
+    method: "POST",
+    headers: { ...headers, "Content-Type": "application/json" },
+    body: JSON.stringify({ session_id: sessionId }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.message || data?.error || `Failed to sync subscription (${res.status})`);
+  return data;
+}

@@ -195,7 +195,7 @@ export default function NavBar() {
           onBuyCredits={() => setShowCreditsModal(true)}
         />
       )}
-      {showCreditsModal && <CreditsModal onClose={handleCloseCreditsModal} />}
+      {showCreditsModal && <CreditsModal onClose={handleCloseCreditsModal} hasSubscription={me?.subscription_status === "active" || me?.subscription_status === "cancelling"} />}
     </>
   );
 }

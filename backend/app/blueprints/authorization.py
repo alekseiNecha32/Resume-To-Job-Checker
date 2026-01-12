@@ -88,7 +88,7 @@ def me():
         if not uid:
             return jsonify({"error": "unauthorized"}), 401
 
-        res = supabase.table("profiles").select("credits, avatar_url").eq("user_id", uid).limit(1).execute()
+        res = supabase.table("profiles").select("credits, avatar_url, subscription_id, subscription_status, subscription_period_end").eq("user_id", uid).limit(1).execute()
         raw = res.get("data") if isinstance(res, dict) else getattr(res, "data", None)
         row = raw[0] if isinstance(raw, list) and raw else {}
 
@@ -96,7 +96,10 @@ def me():
             "user_id": uid,
             "email": email,
             "credits": row.get("credits", 0),
-            "avatar_url": row.get("avatar_url")
+            "avatar_url": row.get("avatar_url"),
+            "subscription_id": row.get("subscription_id"),
+            "subscription_status": row.get("subscription_status"),
+            "subscription_period_end": row.get("subscription_period_end")
         }), 200
     except Exception:
         traceback.print_exc()

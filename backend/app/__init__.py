@@ -1,4 +1,5 @@
 import os
+import logging
 from flask import Flask
 from flask_cors import CORS
 from dotenv import load_dotenv
@@ -15,6 +16,10 @@ def create_app():
     load_dotenv()
     app = Flask(__name__)
     app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev")
+
+    # Reduce noisy logs from httpx/stripe
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("stripe").setLevel(logging.WARNING)
 
     openai_key = os.getenv("OPENAI_API_KEY")
     app.config["OPENAI_CLIENT"] = OpenAI(api_key=openai_key) if openai_key else None

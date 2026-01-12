@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { createCheckoutSession } from "../services/apiClient.js";
 
-export default function CreditsModal({ onClose }) {
+export default function CreditsModal({ onClose, hasSubscription = false }) {
   const [processing, setProcessing] = useState(false);
   const [msg, setMsg] = useState("");
-  const [customCredits, setCustomCredits] = useState(15);
+  const [customCredits, setCustomCredits] = useState(10);
 
   useEffect(() => {
     function onKey(e) {
@@ -14,31 +14,21 @@ export default function CreditsModal({ onClose }) {
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  // Pricing: custom pack = $2 per credit (client preview only)
-  const CUSTOM_USD_PER_CREDIT = 2;
-
-  function calcPriceForCredits(credits) {
-    const c = Math.max(1, Math.floor(Number(credits) || 1));
-    return c * CUSTOM_USD_PER_CREDIT;
-  }
-
-  async function startCheckout({ packId, credits } = {}) {
+  async function startCheckout(packId, credits) {
     setProcessing(true);
     setMsg("");
     try {
-      const payload = { packId };
-      if (packId === "custom") payload.credits = Math.max(1, Math.floor(credits || 0));
-
-      // Store intended credits locally for optimistic UI after redirect
+      const creditAmount = packId === "pro" ? 10 : credits;
       try {
-        const intended = packId === "pro" ? 10 : (payload.credits || 0);
-        if (intended > 0) {
-          localStorage.setItem(
-            "pendingPurchase",
-            JSON.stringify({ credits: intended, ts: Date.now() })
-          );
-        }
+        localStorage.setItem(
+          "pendingPurchase",
+          JSON.stringify({ credits: creditAmount, ts: Date.now() })
+        );
       } catch (_) {}
+
+      const payload = packId === "pro"
+        ? { packId: "pro" }
+        : { packId: "custom", credits };
 
       const data = await createCheckoutSession(payload);
       if (data?.url) {
@@ -84,96 +74,85 @@ export default function CreditsModal({ onClose }) {
         </div>
 
         <div className="px-6 py-6 space-y-6">
-          {/* Pro Pack card */}
-          <div className="rounded-xl border-2 border-indigo-300 p-6">
-            <div className="flex justify-center">
-              <div className="badge inline-flex items-center bg-indigo-600 text-white px-3 py-1 rounded-full text-sm">
-                Most Popular
+          {/* Pro Subscription card - only show if not subscribed */}
+          {!hasSubscription && (
+            <div className="rounded-xl border-2 border-indigo-300 p-6">
+              <div className="flex justify-center">
+                <div className="badge inline-flex items-center bg-indigo-600 text-white px-3 py-1 rounded-full text-sm">
+                  Best Value
+                </div>
+              </div>
+              <div className="text-center mt-4">
+                <div className="text-lg font-medium">Pro Subscription</div>
+                <div className="text-4xl font-extrabold mt-3">$5<span className="text-lg font-normal text-gray-500">/month</span></div>
+                <div className="text-sm text-gray-500 mt-1">10 credits every month</div>
+
+                <ul className="mt-4 space-y-2 text-sm text-gray-700">
+                  <li>✓ Resume Constructor: 3 live AI suggestions you can accept or reject</li>
+                  <li>✓ Critical gaps based on the job description</li>
+                  <li>✓ Matching keywords + missing keywords + fit estimate</li>
+                  <li>✓ Advanced insights</li>
+                  <li>✓ Cancel anytime</li>
+                </ul>
+
+                <button
+                  onClick={() => startCheckout("pro")}
+                  disabled={processing}
+                  className="mt-6 w-full rounded-full bg-indigo-600 text-white py-3 font-semibold disabled:opacity-60"
+                >
+                  {processing ? "Processing…" : "Subscribe Now"}
+                </button>
               </div>
             </div>
-            <div className="text-center mt-4">
-              <div className="text-lg font-medium">Pro Pack</div>
-              <div className="text-4xl font-extrabold mt-3">$7</div>
-              <div className="text-sm text-gray-500 mt-1">10 credits</div>
+          )}
 
-              <ul className="mt-4 space-y-2 text-sm text-gray-700">
-                <li>✓ Resume Constructor: 3 live AI suggestions you can accept orreject</li>
-                <li>✓ Critical gaps based on the job description</li>
-                <li>✓ Matching keywords + missing keywords + fit estimate</li>
-                <li>✓ Advanced insights</li>
-              </ul>
-
-              <button
-                onClick={() => startCheckout({ packId: "pro" })}
-                disabled={processing}
-                className="mt-6 w-full rounded-full bg-indigo-600 text-white py-3 font-semibold disabled:opacity-60"
-              >
-                {processing ? "Processing…" : "Purchase"}
-              </button>
-            </div>
-          </div>
-
-          {/* Custom pack */}
-          <div className="rounded-xl border p-6 bg-white">
+          {/* Custom Credits - One Time */}
+          <div className="rounded-xl border p-6">
             <div className="text-center">
-              <div className="text-lg font-medium">Custom Pack</div>
-              <div className="text-sm text-gray-500 mt-1">Choose your own credit amount</div>
+              <div className="text-lg font-medium">One-Time Purchase</div>
+              <div className="text-sm text-gray-500 mt-1">$1 per credit • No subscription</div>
             </div>
 
-            <div className="mt-6 flex items-center justify-center gap-6">
+            <div className="mt-4 flex items-center justify-center gap-4">
               <button
                 type="button"
-                onClick={() => setCustomCredits((c) => Math.max(1, c - 1))}
+                onClick={() => setCustomCredits(c => Math.max(1, c - 5))}
                 className="w-10 h-10 rounded-lg border flex items-center justify-center text-xl hover:bg-gray-50"
-                aria-label="Decrease credits"
               >
                 −
               </button>
 
               <div className="text-center">
-                <div className="text-3xl font-extrabold">${calcPriceForCredits(customCredits)}</div>
-                <div className="text-sm text-gray-500">
-                  <input
-                    type="number"
-                    value={customCredits}
-                    min={1}
-                    onChange={(e) => {
-                      const v = parseInt(e.target.value, 10);
-                      setCustomCredits(Number.isNaN(v) ? 1 : Math.max(1, v));
-                    }}
-                    className="w-20 text-center bg-transparent outline-none px-2 py-1 text-sm font-medium"
-                  />
-                  <div className="mt-1">{customCredits} credits</div>
-                </div>
+                <input
+                  type="number"
+                  value={customCredits}
+                  min={1}
+                  onChange={(e) => setCustomCredits(Math.max(1, parseInt(e.target.value) || 1))}
+                  className="w-20 text-center text-2xl font-bold border rounded-lg py-1"
+                />
+                <div className="text-sm text-gray-500 mt-1">{customCredits} credits = ${customCredits}</div>
               </div>
 
               <button
                 type="button"
-                onClick={() => setCustomCredits((c) => c + 1)}
+                onClick={() => setCustomCredits(c => c + 5)}
                 className="w-10 h-10 rounded-lg border flex items-center justify-center text-xl hover:bg-gray-50"
-                aria-label="Increase credits"
               >
                 +
               </button>
             </div>
 
-            <div className="mt-4 text-center text-sm text-gray-500">
-              Pricing: $2 = 1 credit. Edit credits directly or use the buttons.
-            </div>
-
-            <div className="mt-6 flex justify-center">
-              <button
-                onClick={() => startCheckout({ packId: "custom", credits: customCredits })}
-                disabled={processing || customCredits < 1}
-                className="rounded-full bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 font-semibold shadow disabled:opacity-60"
-              >
-                {processing ? "Processing…" : `Purchase for $${calcPriceForCredits(customCredits)}`}
-              </button>
-            </div>
+            <button
+              onClick={() => startCheckout("custom", customCredits)}
+              disabled={processing || customCredits < 1}
+              className="mt-4 w-full rounded-full bg-gray-800 text-white py-3 font-semibold disabled:opacity-60"
+            >
+              {processing ? "Processing…" : `Buy ${customCredits} Credits for $${customCredits}`}
+            </button>
           </div>
 
           {msg && (
-            <div className="rounded-md bg-green-50 border border-green-100 p-3 text-sm text-green-800">
+            <div className="rounded-md bg-red-50 border border-red-100 p-3 text-sm text-red-800">
               {msg}
             </div>
           )}

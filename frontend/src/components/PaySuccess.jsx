@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { getProfile } from "../services/apiClient";
+import { getProfile, syncSubscription } from "../services/apiClient";
 import { useMe } from "../context/MeContext.jsx";
 
 export default function PaySuccess() {
@@ -25,6 +25,16 @@ export default function PaySuccess() {
     } catch {}
 
     async function tryRefresh(attempt = 1) {
+      // Sync subscription from Stripe using session_id
+      if (sessionId && attempt === 1) {
+        try {
+          await syncSubscription(sessionId);
+          console.log("Subscription synced successfully");
+        } catch (err) {
+          console.warn("Failed to sync subscription:", err);
+        }
+      }
+
       try {
         const json = await getProfile();
         if (json) {

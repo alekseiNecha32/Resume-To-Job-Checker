@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { useMe } from "../context/MeContext.jsx";
-import { API_BASE } from "../services/apiClient.js";
+import { API_BASE, cancelSubscription, reactivateSubscription, getSubscription } from "../services/apiClient.js";
 
 export default function ProfileMenu({ me, onClose, onLogout, onBuyCredits }) {
   const ref = useRef(null);
@@ -11,6 +11,8 @@ export default function ProfileMenu({ me, onClose, onLogout, onBuyCredits }) {
   const [avatarFile, setAvatarFile] = useState(null);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState(null);
+  const [cancelling, setCancelling] = useState(false);
+  const [reactivating, setReactivating] = useState(false);
 
   useEffect(() => {
     function handle(e) {
@@ -19,6 +21,31 @@ export default function ProfileMenu({ me, onClose, onLogout, onBuyCredits }) {
     document.addEventListener("mousedown", handle);
     return () => document.removeEventListener("mousedown", handle);
   }, [onClose]);
+
+  // Fetch subscription period_end from Stripe if missing
+  useEffect(() => {
+    async function refreshSubscription() {
+      if (
+        displayMe.subscription_status &&
+        ["active", "cancelling"].includes(displayMe.subscription_status) &&
+        !displayMe.subscription_period_end
+      ) {
+        try {
+          const subData = await getSubscription();
+          if (subData.period_end) {
+            setMe?.(prev => ({
+              ...prev,
+              subscription_period_end: subData.period_end,
+            }));
+          }
+        } catch (err) {
+          console.warn("Failed to refresh subscription:", err);
+        }
+      }
+    }
+    refreshSubscription();
+  }, [displayMe.subscription_status, displayMe.subscription_period_end, setMe]);
+
 
   async function handleSave(e) {
     e?.preventDefault();
@@ -65,6 +92,41 @@ export default function ProfileMenu({ me, onClose, onLogout, onBuyCredits }) {
 
   async function handleBuy() {
     onBuyCredits?.();
+  }
+
+  async function handleCancelSubscription() {
+    if (cancelling) return;
+    if (!confirm("Are you sure you want to cancel your subscription? You'll keep access until the end of your billing period.")) return;
+    setCancelling(true);
+    setMsg(null);
+    try {
+      const result = await cancelSubscription();
+      setMe?.(prev => ({
+        ...prev,
+        subscription_status: "cancelling",
+        subscription_period_end: result.period_end || prev.subscription_period_end
+      }));
+      setMsg("Subscription will cancel at end of billing period");
+    } catch (err) {
+      setMsg(err.message || "Failed to cancel");
+    } finally {
+      setCancelling(false);
+    }
+  }
+
+  async function handleReactivateSubscription() {
+    if (reactivating) return;
+    setReactivating(true);
+    setMsg(null);
+    try {
+      await reactivateSubscription();
+      setMe?.(prev => ({ ...prev, subscription_status: "active" }));
+      setMsg("Subscription reactivated!");
+    } catch (err) {
+      setMsg(err.message || "Failed to reactivate");
+    } finally {
+      setReactivating(false);
+    }
   }
 
   return (
@@ -119,12 +181,56 @@ export default function ProfileMenu({ me, onClose, onLogout, onBuyCredits }) {
           </>
         )}
 
-           <div className="credits-gradient">
+        <div className="credits-gradient">
           <div className="credits-label">Smart Analysis Credits</div>
           <div className="credits-value">{displayMe?.credits ?? 0} credits</div>
         </div>
 
-        <button type="button" className="profile-item" onClick={handleBuy}>Buy Credits</button>
+        {displayMe.subscription_status === "active" && (
+          <div style={{ padding: "10px 12px", background: "#e8f5e9", borderRadius: 8, marginBottom: 8 }}>
+            <div style={{ fontSize: 13, color: "#2e7d32", fontWeight: 600 }}>Pro Subscription</div>
+            <div style={{ fontSize: 12, color: "#388e3c", marginTop: 2 }}>$5/month • 10 credits</div>
+            {displayMe.subscription_period_end && (
+              <div style={{ fontSize: 11, color: "#666", marginTop: 4 }}>
+                Renews: {new Date(displayMe.subscription_period_end * 1000).toLocaleDateString()}
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={handleCancelSubscription}
+              disabled={cancelling}
+              style={{ fontSize: 11, color: "#c62828", background: "none", border: "none", padding: 0, cursor: "pointer", marginTop: 6 }}
+            >
+              {cancelling ? "Cancelling..." : "Cancel subscription"}
+            </button>
+          </div>
+        )}
+
+        {displayMe.subscription_status === "cancelling" && (
+          <div style={{ padding: "10px 12px", background: "#fff3e0", borderRadius: 8, marginBottom: 8 }}>
+            <div style={{ fontSize: 13, color: "#e65100", fontWeight: 600 }}>Pro Subscription</div>
+            <div style={{ fontSize: 12, color: "#f57c00", marginTop: 2 }}>Cancelling at period end</div>
+            <div style={{ fontSize: 11, color: "#666", marginTop: 4 }}>
+              Ends: {displayMe.subscription_period_end
+                ? new Date(displayMe.subscription_period_end * 1000).toLocaleDateString()
+                : "Loading..."}
+            </div>
+            <button
+              type="button"
+              onClick={handleReactivateSubscription}
+              disabled={reactivating}
+              style={{ fontSize: 11, color: "#2e7d32", background: "none", border: "none", padding: 0, cursor: "pointer", marginTop: 6 }}
+            >
+              {reactivating ? "Reactivating..." : "Reactivate subscription"}
+            </button>
+          </div>
+        )}
+
+        {msg && !editing && (
+          <div style={{ fontSize: 12, padding: "4px 8px", color: "#666" }}>{msg}</div>
+        )}
+
+        <button type="button" className="profile-item" onClick={handleBuy}>Add Credits</button>
         <button type="button" className="profile-item" onClick={handleLogoff} style={{ color: "#c01818" }}>
           Log off
         </button>

@@ -31,13 +31,13 @@ def grant_dev_credits():
     uid = get_user_id(request)
     if not uid:
         return jsonify({"error": "Missing user"}), 401
-    # upsert profile and add 7 credits
+    # upsert profile and add 10 credits (matches $5/month subscription)
     SUPABASE.table("profiles").upsert({"user_id": uid}).execute()
-    SUPABASE.rpc("increment_profile_credits", {"p_user_id": uid, "p_delta": 7}).execute() \
+    SUPABASE.rpc("increment_profile_credits", {"p_user_id": uid, "p_delta": 10}).execute() \
         if "increment_profile_credits" in [f["name"] for f in SUPABASE.rpc("").functions] \
-        else SUPABASE.table("profiles").update({"credits": SUPABASE.sql("credits + 7")}).eq("user_id", uid).execute()
+        else SUPABASE.table("profiles").update({"credits": SUPABASE.sql("credits + 10")}).eq("user_id", uid).execute()
     # record pseudo purchase
     SUPABASE.table("purchases").insert({
-        "user_id": uid, "amount_cents": 700, "credits_granted": 7, "status": "DEV_GRANTED"
+        "user_id": uid, "amount_cents": 500, "credits_granted": 10, "status": "DEV_GRANTED"
     }).execute()
-    return jsonify({"ok": True, "granted": 7})
+    return jsonify({"ok": True, "granted": 10})
