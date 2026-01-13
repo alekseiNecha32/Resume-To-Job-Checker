@@ -287,7 +287,7 @@ def webhook():
                         current_app.logger.exception("Failed idempotency check")
 
                 if not already_processed:
-                    _grant_credits(uid, credits, stripe_session_id, amount_total, "ONE_TIME_PURCHASE")
+                    _grant_credits(uid, credits, stripe_session_id, amount_total, "COMPLETED")
 
     # Handle recurring invoice payments (including first payment)
     elif event_type == "invoice.paid":
@@ -330,7 +330,7 @@ def webhook():
                 current_app.logger.exception("Failed to retrieve subscription %s", subscription_id)
 
         if uid and credits > 0:
-            _grant_credits(uid, credits, invoice_id, amount_paid, "SUBSCRIPTION_RENEWAL")
+            _grant_credits(uid, credits, invoice_id, amount_paid, "COMPLETED")
             # Also ensure subscription status is saved (fallback if checkout.session.completed missed it)
             if subscription_id:
                 _update_subscription_status(uid, subscription_id, "active", period_end)
