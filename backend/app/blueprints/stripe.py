@@ -8,7 +8,6 @@ load_dotenv()
 
 stripe_bp = Blueprint("stripe_payments", __name__, url_prefix="/api/payments")
 
-# env
 STRIPE_SECRET = os.getenv("STRIPE_SECRET_KEY")
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173").rstrip("/")
@@ -25,7 +24,6 @@ if SUPABASE_URL and SUPABASE_KEY:
     except Exception:
         current_app.logger.exception("Failed to create supabase client")
 
-# server-side pack truth (subscription)
 PACKS = {
     "pro": {"credits": 10, "amount_dollars": 5, "interval": "month"},
 }
@@ -79,7 +77,6 @@ def checkout():
         origin = "http://localhost:5173"
 
     try:
-        # Subscription mode for "pro" pack
         if pack_id == "pro":
             pack = PACKS[pack_id]
             credits = pack["credits"]
@@ -108,7 +105,6 @@ def checkout():
                 success_url=f"{origin}/pay/success?session_id={{CHECKOUT_SESSION_ID}}",
                 cancel_url=f"{origin}/pay/cancel",
             )
-        # One-time payment for custom credits
         else:
             try:
                 credits = int(body.get("credits") or 0)
@@ -155,10 +151,8 @@ def _grant_credits(uid, credits, stripe_id, amount_cents, status="COMPLETED"):
         return False
 
     try:
-        # ensure profile exists
         SUPABASE.table("profiles").upsert({"user_id": uid}).execute()
 
-        # increment credits via RPC or fallback
         try:
             SUPABASE.rpc("increment_profile_credits", {"p_user_id": uid, "p_delta": credits}).execute()
             current_app.logger.info("Incremented %s credits for user %s via RPC", credits, uid)
@@ -172,7 +166,6 @@ def _grant_credits(uid, credits, stripe_id, amount_cents, status="COMPLETED"):
             SUPABASE.table("profiles").update({"credits": current_credits + credits}).eq("user_id", uid).execute()
             current_app.logger.info("Updated user %s credits from %s to %s (fallback)", uid, current_credits, current_credits + credits)
 
-        # insert purchase record
         SUPABASE.table("purchases").insert({
             "user_id": uid,
             "amount_cents": amount_cents,
@@ -239,7 +232,6 @@ def webhook():
     event_type = event.get("type")
     current_app.logger.info("Webhook received: %s", event_type)
 
-    # Handle checkout completion (both subscription and one-time payment)
     if event_type == "checkout.session.completed":
         session = event["data"]["object"]
         stripe_session_id = session.get("id")
@@ -254,9 +246,7 @@ def webhook():
         metadata = session.get("metadata", {}) or {}
         uid = metadata.get("user_id")
 
-        # For subscriptions, credits are granted via invoice.paid event
         if subscription_id and uid:
-            # Retrieve subscription to get period_end
             period_end = None
             try:
                 sub = stripe.Subscription.retrieve(subscription_id)
@@ -265,7 +255,6 @@ def webhook():
                 current_app.logger.warning("Could not retrieve subscription %s for period_end: %s", subscription_id, e)
             _update_subscription_status(uid, subscription_id, "active", period_end)
 
-        # For one-time payments, grant credits immediately
         elif mode == "payment" and uid:
             try:
                 credits = int(metadata.get("credits", "0") or 0)
@@ -274,7 +263,6 @@ def webhook():
             amount_total = int(session.get("amount_total") or 0)
 
             if credits > 0:
-                # Check idempotency
                 already_processed = False
                 if SUPABASE:
                     try:
@@ -289,7 +277,6 @@ def webhook():
                 if not already_processed:
                     _grant_credits(uid, credits, stripe_session_id, amount_total, "ONE_TIME_PURCHASE")
 
-    # Handle recurring invoice payments (including first payment)
     elif event_type == "invoice.paid":
         invoice = event["data"]["object"]
         invoice_id = invoice.get("id")
@@ -301,7 +288,6 @@ def webhook():
             invoice_id, subscription_id, amount_paid,
         )
 
-        # Check idempotency
         if SUPABASE:
             try:
                 res = SUPABASE.table("purchases").select("id").eq("stripe_session_id", invoice_id).limit(1).execute()
@@ -312,7 +298,6 @@ def webhook():
             except Exception:
                 current_app.logger.exception("Failed idempotency check")
 
-        # Get subscription metadata for user_id and credits
         uid = None
         credits = PACKS.get("pro", {}).get("credits", 10)
         period_end = None
@@ -331,13 +316,11 @@ def webhook():
 
         if uid and credits > 0:
             _grant_credits(uid, credits, invoice_id, amount_paid, "SUBSCRIPTION_RENEWAL")
-            # Also ensure subscription status is saved (fallback if checkout.session.completed missed it)
             if subscription_id:
                 _update_subscription_status(uid, subscription_id, "active", period_end)
         else:
             current_app.logger.warning("Cannot grant credits: uid=%s credits=%s", uid, credits)
 
-    # Handle subscription cancellation
     elif event_type == "customer.subscription.deleted":
         subscription = event["data"]["object"]
         subscription_id = subscription.get("id")
@@ -375,11 +358,9 @@ def get_subscription():
                 status = data.get("subscription_status")
                 period_end = data.get("subscription_period_end")
 
-                # If we have a subscription but no period_end, fetch it from Stripe
                 if subscription_id and status in ("active", "cancelling") and not period_end:
                     try:
                         sub = stripe.Subscription.retrieve(subscription_id)
-                        # Try current_period_end first, then cancel_at for cancelled subscriptions
                         period_end = getattr(sub, "current_period_end", None) or getattr(sub, "cancel_at", None)
 
                         if period_end:
@@ -410,7 +391,6 @@ def cancel_subscription():
         return jsonify({"error": "unauthorized"}), 401
 
     try:
-        # Get subscription ID from profile
         if not SUPABASE:
             return jsonify({"error": "database_not_configured"}), 501
 
@@ -421,10 +401,7 @@ def cancel_subscription():
         if not subscription_id:
             return jsonify({"error": "no_active_subscription"}), 400
 
-        # Cancel at period end (user keeps access until billing period ends)
         sub = stripe.Subscription.modify(subscription_id, cancel_at_period_end=True)
-
-        # Get period_end - try current_period_end first, then cancel_at for cancelled subscriptions
         period_end = getattr(sub, "current_period_end", None) or getattr(sub, "cancel_at", None)
         current_app.logger.info("Cancel subscription period_end=%s", period_end)
         _update_subscription_status(user_id, subscription_id, "cancelling", period_end)
@@ -456,18 +433,15 @@ def sync_subscription():
         return jsonify({"error": "missing_session_id"}), 400
 
     try:
-        # Retrieve the checkout session from Stripe
         session = stripe.checkout.Session.retrieve(session_id)
         subscription_id = session.get("subscription")
 
         if not subscription_id:
             return jsonify({"error": "no_subscription_in_session"}), 400
 
-        # Get subscription details from Stripe
         sub = stripe.Subscription.retrieve(subscription_id)
-        period_end = sub.get("current_period_end")  # Unix timestamp
+        period_end = sub.get("current_period_end")
 
-        # Update the user's profile with subscription info
         _update_subscription_status(user_id, subscription_id, "active", period_end)
 
         current_app.logger.info("Synced subscription %s for user %s from session %s", subscription_id, user_id, session_id)
@@ -505,7 +479,6 @@ def reactivate_subscription():
         if status != "cancelling":
             return jsonify({"error": "subscription_not_cancelling"}), 400
 
-        # Reactivate by setting cancel_at_period_end to False
         stripe.Subscription.modify(subscription_id, cancel_at_period_end=False)
         _update_subscription_status(user_id, subscription_id, "active")
 
