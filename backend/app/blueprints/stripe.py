@@ -358,14 +358,21 @@ def get_subscription():
                 status = data.get("subscription_status")
                 period_end = data.get("subscription_period_end")
 
-                if subscription_id and status in ("active", "cancelling") and not period_end:
+                if subscription_id and status in ("active", "cancelling"):
                     try:
                         sub = stripe.Subscription.retrieve(subscription_id)
-                        period_end = getattr(sub, "current_period_end", None) or getattr(sub, "cancel_at", None)
+                        stripe_status = getattr(sub, "status", None)
 
-                        if period_end:
-                            _update_subscription_status(user_id, subscription_id, status, period_end)
-                            current_app.logger.info("Refreshed period_end for user %s: %s", user_id, period_end)
+                        if stripe_status == "canceled" and status != "cancelled":
+                            _update_subscription_status(user_id, None, "cancelled")
+                            status = "cancelled"
+                            subscription_id = None
+                            current_app.logger.info("Synced cancelled status for user %s", user_id)
+                        elif not period_end:
+                            period_end = getattr(sub, "current_period_end", None) or getattr(sub, "cancel_at", None)
+                            if period_end:
+                                _update_subscription_status(user_id, subscription_id, status, period_end)
+                                current_app.logger.info("Refreshed period_end for user %s: %s", user_id, period_end)
                     except Exception as e:
                         current_app.logger.exception("Failed to fetch subscription %s from Stripe: %s", subscription_id, e)
 
@@ -479,11 +486,27 @@ def reactivate_subscription():
         if status != "cancelling":
             return jsonify({"error": "subscription_not_cancelling"}), 400
 
+        sub = stripe.Subscription.retrieve(subscription_id)
+        stripe_status = getattr(sub, "status", None)
+
+        if stripe_status == "canceled":
+            _update_subscription_status(user_id, None, "cancelled")
+            return jsonify({"error": "subscription_already_cancelled", "message": "This subscription has ended. Please subscribe again."}), 400
+
+        if stripe_status != "active":
+            return jsonify({"error": "subscription_not_active", "message": f"Subscription status is {stripe_status}"}), 400
+
         stripe.Subscription.modify(subscription_id, cancel_at_period_end=False)
         _update_subscription_status(user_id, subscription_id, "active")
 
         current_app.logger.info("Subscription %s reactivated for user %s", subscription_id, user_id)
         return jsonify({"ok": True, "message": "Subscription reactivated"}), 200
+    except stripe.error.InvalidRequestError as se:
+        if "canceled" in str(se).lower():
+            _update_subscription_status(user_id, None, "cancelled")
+            return jsonify({"error": "subscription_already_cancelled", "message": "This subscription has ended. Please subscribe again."}), 400
+        current_app.logger.exception("Stripe error reactivating subscription")
+        return jsonify({"error": "stripe_error", "message": str(se)}), 502
     except stripe.error.StripeError as se:
         current_app.logger.exception("Stripe error reactivating subscription")
         return jsonify({"error": "stripe_error", "message": str(se)}), 502
