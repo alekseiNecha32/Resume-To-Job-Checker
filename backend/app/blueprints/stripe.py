@@ -164,8 +164,6 @@ def _grant_credits(uid, credits, stripe_id, amount_cents, status="COMPLETED"):
         return False
 
     try:
-        SUPABASE.table("profiles").upsert({"user_id": uid}).execute()
-
         try:
             SUPABASE.table("purchases").insert({
                 "user_id": uid,
@@ -176,23 +174,21 @@ def _grant_credits(uid, credits, stripe_id, amount_cents, status="COMPLETED"):
             }).execute()
             current_app.logger.info("Inserted purchase record for %s user %s credits %s", stripe_id, uid, credits)
         except Exception as insert_err:
-            if "duplicate" in str(insert_err).lower() or "unique" in str(insert_err).lower():
+            if "duplicate" in str(insert_err).lower() or "unique" in str(insert_err).lower() or "23505" in str(insert_err):
                 current_app.logger.info("Purchase %s already exists, skipping credit grant", stripe_id)
                 return True
             raise
 
-        try:
-            SUPABASE.rpc("increment_profile_credits", {"p_user_id": uid, "p_delta": credits}).execute()
-            current_app.logger.info("Incremented %s credits for user %s via RPC", credits, uid)
-        except Exception:
-            cur = SUPABASE.table("profiles").select("credits").eq("user_id", uid).single().execute()
-            current_credits = 0
-            if hasattr(cur, "data"):
-                current_credits = int((cur.data or {}).get("credits") or 0)
-            else:
-                current_credits = int((cur.get("data") or {}).get("credits") or 0)
-            SUPABASE.table("profiles").update({"credits": current_credits + credits}).eq("user_id", uid).execute()
-            current_app.logger.info("Updated user %s credits from %s to %s (fallback)", uid, current_credits, current_credits + credits)
+        cur = SUPABASE.table("profiles").select("credits").eq("user_id", uid).single().execute()
+        current_credits = 0
+        if hasattr(cur, "data") and cur.data:
+            current_credits = int(cur.data.get("credits") or 0)
+        elif isinstance(cur, dict) and cur.get("data"):
+            current_credits = int(cur["data"].get("credits") or 0)
+
+        new_credits = current_credits + credits
+        SUPABASE.table("profiles").update({"credits": new_credits}).eq("user_id", uid).execute()
+        current_app.logger.info("Updated user %s credits from %s to %s", uid, current_credits, new_credits)
         return True
     except Exception:
         current_app.logger.exception("Failed to grant credits")
