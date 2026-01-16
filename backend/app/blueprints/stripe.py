@@ -32,44 +32,34 @@ CUSTOM_USD_PER_CREDIT = 1  # $1 per credit for one-time purchases
 
 
 def _resolve_user_id(req):
-    # Prefer Authorization: Bearer <token> -> supabase admin get_user if available
     auth = req.headers.get("Authorization", "") or ""
     if auth.lower().startswith("bearer "):
         token = auth.split(" ", 1)[1].strip()
         try:
             if SUPABASE:
                 resp = None
-                # Try different Supabase client versions
                 if hasattr(SUPABASE.auth, "get_user"):
                     resp = SUPABASE.auth.get_user(token)
                 elif hasattr(SUPABASE.auth, "api") and hasattr(SUPABASE.auth.api, "get_user"):
                     resp = SUPABASE.auth.api.get_user(token)
 
                 if resp:
-                    # Handle different response formats
                     user = None
-                    # Supabase v2: resp.user is the user object directly
                     if hasattr(resp, "user") and resp.user:
                         user = resp.user
-                    # Dict response format
                     elif isinstance(resp, dict):
                         user = resp.get("user") or (resp.get("data") or {}).get("user")
 
                     if user:
                         uid = user.get("id") if isinstance(user, dict) else getattr(user, "id", None)
                         if uid:
-                            current_app.logger.debug("Resolved user_id from token: %s", uid)
                             return uid
 
                 current_app.logger.warning("Could not extract user_id from supabase response: %s", type(resp))
         except Exception as e:
             current_app.logger.warning("supabase get_user failed: %s", str(e))
 
-    # fallback for local/dev: X-User-Id header
-    fallback_id = req.headers.get("X-User-Id")
-    if fallback_id:
-        current_app.logger.debug("Using fallback X-User-Id header: %s", fallback_id)
-    return fallback_id
+    return req.headers.get("X-User-Id")
 
 
 @stripe_bp.post("/checkout")
@@ -278,29 +268,6 @@ def webhook():
                 current_app.logger.warning("Could not retrieve subscription %s for period_end: %s", subscription_id, e)
             _update_subscription_status(uid, subscription_id, "active", period_end)
 
-            # Grant first month credits immediately on subscription creation
-            try:
-                credits = int(metadata.get("credits", "0") or 0)
-            except Exception:
-                credits = PACKS.get("pro", {}).get("credits", 10)
-            amount_total = int(session.get("amount_total") or 0)
-
-            if credits > 0:
-                # Use session_id for idempotency to prevent duplicate grants
-                already_processed = False
-                if SUPABASE:
-                    try:
-                        res = SUPABASE.table("purchases").select("id").eq("stripe_session_id", stripe_session_id).limit(1).execute()
-                        already = getattr(res, "data", None) or (res.get("data") if isinstance(res, dict) else None)
-                        if already:
-                            already_processed = True
-                            current_app.logger.info("Subscription session %s already processed, skipping credit grant", stripe_session_id)
-                    except Exception:
-                        current_app.logger.exception("Failed idempotency check for subscription")
-
-                if not already_processed:
-                    _grant_credits(uid, credits, stripe_session_id, amount_total, "SUBSCRIPTION_INITIAL")
-
         elif mode == "payment" and uid:
             try:
                 credits = int(metadata.get("credits", "0") or 0)
@@ -335,9 +302,8 @@ def webhook():
             invoice_id, subscription_id, amount_paid, billing_reason,
         )
 
-        # Skip initial subscription invoice - credits are granted in checkout.session.completed
         if billing_reason == "subscription_create":
-            current_app.logger.info("Skipping invoice %s - initial subscription handled by checkout.session.completed", invoice_id)
+            current_app.logger.info("Skipping initial subscription invoice %s", invoice_id)
             return jsonify({"received": True}), 200
 
         if SUPABASE:
@@ -497,7 +463,6 @@ def sync_subscription():
         mode = session.get("mode")
         metadata = session.get("metadata", {}) or {}
 
-        # Handle one-time payments
         if mode == "payment":
             try:
                 credits = int(metadata.get("credits", "0") or 0)
@@ -506,7 +471,6 @@ def sync_subscription():
             amount_total = int(session.get("amount_total") or 0)
 
             if credits > 0:
-                # Check if already processed
                 already_processed = False
                 if SUPABASE:
                     try:
@@ -524,7 +488,6 @@ def sync_subscription():
 
             return jsonify({"ok": True, "credits_granted": credits if not already_processed else 0}), 200
 
-        # Handle subscriptions
         if not subscription_id:
             return jsonify({"error": "no_subscription_in_session"}), 400
 
@@ -533,7 +496,6 @@ def sync_subscription():
 
         _update_subscription_status(user_id, subscription_id, "active", period_end)
 
-        # Grant initial credits if not already granted (fallback for webhook)
         try:
             credits = int(metadata.get("credits", "0") or 0)
         except Exception:
@@ -542,7 +504,6 @@ def sync_subscription():
 
         credits_granted = 0
         if credits > 0:
-            # Check if already processed by webhook
             already_processed = False
             if SUPABASE:
                 try:
