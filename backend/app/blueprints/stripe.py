@@ -167,6 +167,21 @@ def _grant_credits(uid, credits, stripe_id, amount_cents, status="COMPLETED"):
         SUPABASE.table("profiles").upsert({"user_id": uid}).execute()
 
         try:
+            SUPABASE.table("purchases").insert({
+                "user_id": uid,
+                "amount_cents": amount_cents,
+                "credits_granted": credits,
+                "status": status,
+                "stripe_session_id": stripe_id,
+            }).execute()
+            current_app.logger.info("Inserted purchase record for %s user %s credits %s", stripe_id, uid, credits)
+        except Exception as insert_err:
+            if "duplicate" in str(insert_err).lower() or "unique" in str(insert_err).lower():
+                current_app.logger.info("Purchase %s already exists, skipping credit grant", stripe_id)
+                return True
+            raise
+
+        try:
             SUPABASE.rpc("increment_profile_credits", {"p_user_id": uid, "p_delta": credits}).execute()
             current_app.logger.info("Incremented %s credits for user %s via RPC", credits, uid)
         except Exception:
@@ -178,15 +193,6 @@ def _grant_credits(uid, credits, stripe_id, amount_cents, status="COMPLETED"):
                 current_credits = int((cur.get("data") or {}).get("credits") or 0)
             SUPABASE.table("profiles").update({"credits": current_credits + credits}).eq("user_id", uid).execute()
             current_app.logger.info("Updated user %s credits from %s to %s (fallback)", uid, current_credits, current_credits + credits)
-
-        SUPABASE.table("purchases").insert({
-            "user_id": uid,
-            "amount_cents": amount_cents,
-            "credits_granted": credits,
-            "status": status,
-            "stripe_session_id": stripe_id,
-        }).execute()
-        current_app.logger.info("Inserted purchase record for %s user %s credits %s", stripe_id, uid, credits)
         return True
     except Exception:
         current_app.logger.exception("Failed to grant credits")
@@ -503,22 +509,18 @@ def sync_subscription():
         amount_total = int(session.get("amount_total") or 0)
 
         credits_granted = 0
-        if credits > 0:
-            already_processed = False
-            if SUPABASE:
-                try:
-                    res = SUPABASE.table("purchases").select("id").eq("stripe_session_id", session_id).limit(1).execute()
-                    already = getattr(res, "data", None) or (res.get("data") if isinstance(res, dict) else None)
-                    if already:
-                        already_processed = True
-                        current_app.logger.info("Session %s already processed, skipping credit grant in sync", session_id)
-                except Exception:
-                    current_app.logger.exception("Failed idempotency check in sync")
-
-            if not already_processed:
-                _grant_credits(user_id, credits, session_id, amount_total, "SUBSCRIPTION_INITIAL_SYNC")
-                credits_granted = credits
-                current_app.logger.info("Granted %s credits to user %s via sync (subscription)", credits, user_id)
+        if credits > 0 and SUPABASE:
+            try:
+                res = SUPABASE.table("purchases").select("id").eq("stripe_session_id", subscription_id).limit(1).execute()
+                already = getattr(res, "data", None) or (res.get("data") if isinstance(res, dict) else None)
+                if not already:
+                    _grant_credits(user_id, credits, subscription_id, amount_total, "SUBSCRIPTION_INITIAL")
+                    credits_granted = credits
+                    current_app.logger.info("Granted %s credits to user %s for subscription %s", credits, user_id, subscription_id)
+                else:
+                    current_app.logger.info("Subscription %s already processed, skipping credit grant", subscription_id)
+            except Exception:
+                current_app.logger.exception("Failed to process credits in sync")
 
         current_app.logger.info("Synced subscription %s for user %s from session %s", subscription_id, user_id, session_id)
         return jsonify({"ok": True, "subscription_id": subscription_id, "status": "active", "period_end": period_end, "credits_granted": credits_granted}), 200
