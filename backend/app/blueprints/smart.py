@@ -17,9 +17,6 @@ def get_user_id():
 
 
 def _resume_json_to_text(resume_json: dict) -> str:
-    """
-    Best-effort flattening for metric safety checks.
-    """
     if not isinstance(resume_json, dict):
         return ""
     parts = []
@@ -86,7 +83,7 @@ def suggest():
 
     client = current_app.config.get("OPENAI_CLIENT")
     if not client:
-        suggestions = enforce_no_fake_metrics(fallback_list(), resume_text)  # NEW
+        suggestions = enforce_no_fake_metrics(fallback_list(), resume_text)
         return jsonify({"suggestions": suggestions})
 
     prompt = f"""
@@ -121,11 +118,7 @@ JSON only.
         )
         raw = completion.output[0].content[0].text
         suggestions = json.loads(raw)
-
-        # NEW: enforce metric safety deterministically server-side
         suggestions = enforce_no_fake_metrics(suggestions, resume_text)
-
-        # Optional guard: keep at most 5
         if isinstance(suggestions, list):
             suggestions = suggestions[:5]
     except Exception as e:
@@ -189,7 +182,6 @@ def analyze():
         if not d or not d.get("resume_text") or not d.get("job_text"):
             return jsonify({"error": "Missing resume_text or job_text"}), 400
 
-          # define inputs once
         resume_text = d.get("resume_text", "")
         job_text = d.get("job_text", "")
         job_title = d.get("job_title", "")
@@ -305,7 +297,6 @@ Requirements:
                 lego_resume = model_payload.get("structuredResume")
                 lego_suggestions = model_payload.get("suggestions")
 
-                # NEW: enforce metric safety + cap to 5
                 if isinstance(lego_suggestions, list):
                     lego_suggestions = enforce_no_fake_metrics(lego_suggestions, resume_text)
                     lego_suggestions = lego_suggestions[:5]
@@ -316,15 +307,12 @@ Requirements:
                 lego_resume = None
                 lego_suggestions = None
 
-        # Deduct credits
         try:
             supabase.table("profiles").update({"credits": credits - 1}).eq("user_id", uid).execute()
         except Exception as e:
             logger.error(f"Failed to deduct credits: {e}")
-            # Don't fail - user already got analysis
             pass
 
-        # Save to DB (now includes personal_suggestions + lego data)
         try:
             supabase.table("analyses").insert({
                 "user_id": uid,
@@ -362,14 +350,9 @@ Requirements:
             "section_suggestions": section_suggestions,
             "ready_bullets": ready_bullets,
             "rewrite_hints": rewrite_hints,
-
-            # Old field your current UI uses:
             "personal_suggestions": suggestions_text,
-
-            # === LEGO BLOCKS for new UI ===
             "lego_resume": lego_resume,
             "lego_suggestions": lego_suggestions,
-
             "remaining_credits": credits - 1,
             "model_source": {
                 "scoring": "MiniLM",

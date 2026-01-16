@@ -88,7 +88,7 @@ export default function CreditsModal({ onClose, hasSubscription = false }) {
                 <div className="text-sm text-gray-500 mt-1">10 credits every month</div>
 
                 <ul className="mt-4 space-y-2 text-sm text-gray-700">
-                  <li>✓ Resume Constructor: 3 live AI suggestions you can accept or reject</li>
+                  <li>✓ Resume Constructor: 5 live AI suggestions you can accept or reject</li>
                   <li>✓ Critical gaps based on the job description</li>
                   <li>✓ Matching keywords + missing keywords + fit estimate</li>
                   <li>✓ Advanced insights</li>

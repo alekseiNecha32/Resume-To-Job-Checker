@@ -81,7 +81,6 @@ def score_resume_to_job():
 
     data = request.get_json(silent=True) or {}
 
-    # Accept both camelCase and snake_case
     resume_text = _as_text(data.get("resumeText") or data.get("resume_text")).strip()
     job_text    = _as_text(data.get("jobText")    or data.get("job_text")).strip()
     job_title   = _as_text(data.get("jobTitle")   or data.get("job_title")).strip()
@@ -138,7 +137,6 @@ def score_resume_to_job():
             if not is_noise(a) and not is_noise(b):
                 yield f"{a} {b}"
 
-    # ---- build keyword list from JD ----
     job_tokens_raw = tokenize(job_text)
     job_tokens = [t for t in job_tokens_raw if not is_noise(t)]
 
@@ -147,12 +145,10 @@ def score_resume_to_job():
 
     freq = Counter(job_tokens)
 
-    # boost any token that is in SKILL_HINTS
     for t in list(freq.keys()):
         if t in SKILL_HINTS:
             freq[t] += 2.5
 
-    # boost job title tokens
     title_tokens = [t for t in tokenize(job_title) if not is_noise(t)]
     for t in title_tokens:
         freq[t] += 3.0
@@ -193,7 +189,6 @@ def score_resume_to_job():
 
     job_keywords = ordered
 
-    # ---- check what the resume actually covers ----
     resume_tokens = set(tokenize(resume_text))
 
     
@@ -204,9 +199,9 @@ def score_resume_to_job():
 
     matched, missing = [], []
     for kw in job_keywords:
-        if " " in kw:          # bigram / phrase
+        if " " in kw:
             hit = literal_hit(kw, resume_text)
-        else:                  # unigram
+        else:
             hit = kw in resume_tokens
         (matched if hit else missing).append(kw)
 

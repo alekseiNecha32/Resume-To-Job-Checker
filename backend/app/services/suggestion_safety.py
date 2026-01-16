@@ -12,8 +12,7 @@ _ANY_DIGIT_RE = re.compile(r"\d")
 def resume_has_metrics(resume_text: str) -> bool:
     if not resume_text:
         return False
-    # If they have any numeric evidence at all, allow numeric suggestions.
-    # (You can tighten this later to require %/$/time units only.)
+    
     return bool(_ANY_DIGIT_RE.search(resume_text))
 
 def strip_numbers(text: str) -> str:
@@ -24,16 +23,12 @@ def strip_numbers(text: str) -> str:
     if not text:
         return text
 
-    # Remove common "by 30%" / "by 2x" phrases first
     text = re.sub(r"\bby\s+\d+(\.\d+)?\s*(%|x|pp)\b", "", text, flags=re.IGNORECASE)
 
-    # Remove remaining metric-like tokens
     text = _METRIC_RE.sub("", text)
 
-    # Remove any leftover standalone digits (e.g., "10+ APIs")
     text = re.sub(r"\b\d+\+?\b", "", text)
 
-    # Cleanup whitespace/punctuation
     text = re.sub(r"\s{2,}", " ", text).strip()
     text = re.sub(r"\s+([,.;:])", r"\1", text)
     return text
@@ -45,7 +40,6 @@ def hedge_if_needed(text: str) -> str:
     if re.search(r"\b(aimed to|helped|contributed to|worked to|supported|improved)\b", text, re.IGNORECASE):
         return text
 
-    # Avoid "Helped improved ..." if the string starts with "Improved ..."
     if re.match(r"^\s*improv(ed|ing)\b", text, re.IGNORECASE):
         return f"Aimed to {text[0].lower() + text[1:]}" if len(text) > 1 else f"Aimed to {text}"
 

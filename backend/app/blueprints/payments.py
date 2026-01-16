@@ -9,8 +9,6 @@ SUPABASE = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVIC
 DEV_PAYMENTS = os.getenv("DEV_PAYMENTS", "false").lower() == "true"
 
 def get_user_id(req):
-    # Expect a Supabase auth JWT from frontend (Authorization: Bearer <token>)
-    # Use Supabase's auth API to get the user; or pass user_id in dev.
     uid = req.headers.get("X-User-Id")
     return uid  
 
@@ -31,7 +29,6 @@ def grant_dev_credits():
     uid = get_user_id(request)
     if not uid:
         return jsonify({"error": "Missing user"}), 401
-    # upsert profile and add 10 credits (matches $5/month subscription)
     SUPABASE.table("profiles").upsert({"user_id": uid}).execute()
     SUPABASE.rpc("increment_profile_credits", {"p_user_id": uid, "p_delta": 10}).execute() \
         if "increment_profile_credits" in [f["name"] for f in SUPABASE.rpc("").functions] \
