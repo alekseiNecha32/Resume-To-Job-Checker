@@ -2,13 +2,13 @@ import { useState, useRef } from "react";
 import {
     suggestResume,
     extractTextFromFileAPI,
-    downloadOptimizedResumeDocx,
     smartAnalyze,
     getMe,
 } from "../services/apiClient";
 import { useMe } from "../context/MeContext.jsx";
 import ResumePreview from "./ResumePreview";
 import SuggestionsPanel from "./SuggestionsPanel";
+import TemplateSelectionModal from "./TemplateSelectionModal";
 import "../styles/resume.css";
 
 
@@ -98,7 +98,7 @@ export default function ResumeConstructor() {
     const [error, setError] = useState(null);
     const resumeRef = useRef(null);
     const fileInputRef = useRef(null);
-    const [downloading, setDownloading] = useState(false);
+    const [showTemplateModal, setShowTemplateModal] = useState(false);
     const { me, setMe } = useMe();
     const [highlightedIds, setHighlightedIds] = useState([]);
     const [missingKeywords, setMissingKeywords] = useState([]);
@@ -275,30 +275,6 @@ export default function ResumeConstructor() {
     };
 
 
-    const handleDownloadDocx = async () => {
-        if (!resume) return;
-
-        try {
-            setDownloading(true);
-            const blob = await downloadOptimizedResumeDocx(resume);
-
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = "optimized_resume.docx";
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            URL.revokeObjectURL(url);
-        } catch (err) {
-            console.error(err);
-            setError(err.message || "Failed to download Word file.");
-        } finally {
-            setDownloading(false);
-        }
-    };
-
-
 
 
 
@@ -431,10 +407,10 @@ export default function ResumeConstructor() {
                             <button
                                 type="button"
                                 className="ats-btn-secondary ats-download-btn"
-                                onClick={handleDownloadDocx}
-                                disabled={downloading || !resume}
+                                onClick={() => setShowTemplateModal(true)}
+                                disabled={!resume}
                             >
-                                {downloading ? "Downloading..." : "Download DOCX"}
+                                Download Resume
                             </button>
                         </div>
                         <div
@@ -528,6 +504,13 @@ export default function ResumeConstructor() {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {showTemplateModal && (
+                <TemplateSelectionModal
+                    resume={resume}
+                    onClose={() => setShowTemplateModal(false)}
+                />
             )}
         </div>
     );

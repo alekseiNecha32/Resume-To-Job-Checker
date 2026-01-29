@@ -1,0 +1,7 @@
+{
+    "id": "classic",
+    "name": "Classic",
+    "description": "Traditional single-column layout with clean typography. Best for corporate and traditional industries.",
+    "font": "Times New Roman",
+    "supported_formats": ["docx"]
+}

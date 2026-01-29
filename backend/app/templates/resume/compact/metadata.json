@@ -1,0 +1,7 @@
+{
+    "id": "compact",
+    "name": "Compact",
+    "description": "Dense layout maximizing content. Ideal for experienced professionals with extensive skills.",
+    "font": "Arial",
+    "supported_formats": ["docx"]
+}

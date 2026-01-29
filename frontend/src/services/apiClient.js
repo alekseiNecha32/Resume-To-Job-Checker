@@ -45,7 +45,7 @@ export async function scoreResume(resumeText, jobText, jobTitle = "") {
     denominator: data.denominator ?? undefined,
   };
 }
-// ...existing code...
+
 export async function suggestResume({ resume, jobText }) {
   const res = await fetch(`${API_BASE}/smart/suggest`, {
     method: "POST",
@@ -170,6 +170,40 @@ export async function downloadOptimizedResumeDocx(resume) {
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`Failed to export DOCX: ${res.status} ${text}`);
+  }
+
+  return await res.blob();
+}
+
+export async function getResumeTemplates() {
+  const res = await fetch(`${API_BASE}/export/templates`, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Failed to get templates: ${res.status} ${text}`);
+  }
+
+  const data = await res.json();
+  return data.templates || [];
+}
+
+export async function downloadStyledResume(resume, templateId) {
+  const res = await fetch(`${API_BASE}/export/resume-styled`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ resume, template_id: templateId }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Failed to export styled resume: ${res.status} ${text}`);
   }
 
   return await res.blob();

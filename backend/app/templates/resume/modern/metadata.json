@@ -1,0 +1,7 @@
+{
+    "id": "modern",
+    "name": "Modern",
+    "description": "Clean sans-serif design with subtle styling. Perfect for tech and creative roles.",
+    "font": "Calibri",
+    "supported_formats": ["docx"]
+}
