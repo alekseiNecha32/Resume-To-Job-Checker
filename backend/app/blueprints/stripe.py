@@ -164,6 +164,19 @@ def _grant_credits(uid, credits, stripe_id, amount_cents, status="COMPLETED"):
         return False
 
     try:
+        # 1) Ensure the profile row exists before anything else
+        try:
+            profile_check = SUPABASE.table("profiles").select("user_id").eq("user_id", uid).execute()
+            profile_data = getattr(profile_check, "data", None) or (profile_check.get("data") if isinstance(profile_check, dict) else None)
+            if not profile_data:
+                current_app.logger.info("Profile not found for user %s, creating one", uid)
+                SUPABASE.table("profiles").insert({"user_id": uid, "credits": 0}).execute()
+        except Exception as profile_err:
+            # Ignore duplicate key errors (profile already exists)
+            if "duplicate" not in str(profile_err).lower() and "23505" not in str(profile_err):
+                current_app.logger.warning("Profile check/create failed for user %s: %s", uid, profile_err)
+
+        # 2) Record the purchase (idempotency: skip if already exists)
         try:
             SUPABASE.table("purchases").insert({
                 "user_id": uid,
@@ -179,12 +192,17 @@ def _grant_credits(uid, credits, stripe_id, amount_cents, status="COMPLETED"):
                 return True
             raise
 
-        cur = SUPABASE.table("profiles").select("credits").eq("user_id", uid).single().execute()
+        # 3) Read current credits and add new ones
         current_credits = 0
-        if hasattr(cur, "data") and cur.data:
-            current_credits = int(cur.data.get("credits") or 0)
-        elif isinstance(cur, dict) and cur.get("data"):
-            current_credits = int(cur["data"].get("credits") or 0)
+        try:
+            cur = SUPABASE.table("profiles").select("credits").eq("user_id", uid).limit(1).execute()
+            cur_data = getattr(cur, "data", None) or (cur.get("data") if isinstance(cur, dict) else None)
+            if cur_data and isinstance(cur_data, list) and len(cur_data) > 0:
+                current_credits = int(cur_data[0].get("credits") or 0)
+            elif cur_data and isinstance(cur_data, dict):
+                current_credits = int(cur_data.get("credits") or 0)
+        except Exception as read_err:
+            current_app.logger.warning("Could not read current credits for user %s: %s", uid, read_err)
 
         new_credits = current_credits + credits
         SUPABASE.table("profiles").update({"credits": new_credits}).eq("user_id", uid).execute()
