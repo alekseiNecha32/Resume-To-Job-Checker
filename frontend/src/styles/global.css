@@ -179,6 +179,7 @@ input { padding:10px 12px; border-radius:8px; border:1px solid rgba(15,23,42,0.0
 /* ...existing styles... */
 
 .rtjc-avatar-btn { background: transparent; border: 0; padding: 0; cursor: pointer; }
+.rtjc-avatar-img { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; }
 .profile-dropdown {
   position: absolute;
   top: 68px;
@@ -319,4 +320,147 @@ input { padding:10px 12px; border-radius:8px; border:1px solid rgba(15,23,42,0.0
   font-weight: 700;
   line-height: 1.1;
   filter: drop-shadow(0 2px 4px rgba(0,0,0,0.25));
+}
+
+/* ===========================
+   MOBILE RESPONSIVE
+   =========================== */
+
+@media (max-width: 768px) {
+  /* NAVBAR */
+  .rtjc-nav {
+    flex-wrap: wrap;
+    padding: 12px 16px;
+    gap: 8px;
+  }
+
+  .rtjc-brand {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .rtjc-sub {
+    display: none;
+  }
+
+  .rtjc-logo {
+    width: 36px;
+    height: 36px;
+    font-size: 16px;
+    border-radius: 8px;
+  }
+
+  .rtjc-title {
+    font-size: 14px;
+  }
+
+  .rtjc-nav-links {
+    display: none;
+  }
+
+  .rtjc-actions {
+    gap: 8px;
+  }
+
+  .rtjc-profile {
+    gap: 6px;
+  }
+
+  .rtjc-avatar {
+    width: 34px;
+    height: 34px;
+    font-size: 13px;
+  }
+
+  .rtjc-avatar-img {
+    width: 34px;
+    height: 34px;
+  }
+
+  .rtjc-meta {
+    display: none;
+  }
+
+  .btn {
+    padding: 6px 10px;
+    font-size: 13px;
+  }
+
+  /* PROFILE DROPDOWN */
+  .profile-dropdown {
+    position: fixed;
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    border-radius: 16px 16px 0 0;
+    box-shadow: 0 -8px 30px rgba(2, 6, 23, 0.15);
+    max-height: 85vh;
+    overflow-y: auto;
+    padding: 16px;
+    z-index: 1200;
+  }
+
+  /* AUTH MODAL */
+  .rtjc-modal {
+    width: calc(100% - 32px);
+    max-width: 420px;
+    margin: 0 16px;
+  }
+
+  .rtjc-modal-header {
+    padding: 14px 16px;
+  }
+
+  .rtjc-body {
+    padding: 14px 16px 20px;
+  }
+
+  /* CREDITS GRADIENT in profile */
+  .credits-gradient {
+    padding: 12px 16px;
+    border-radius: 14px;
+    gap: 12px;
+  }
+
+  .credits-gradient .credits-value {
+    font-size: 20px;
+  }
+}
+
+@media (max-width: 480px) {
+  .rtjc-nav {
+    padding: 10px 12px;
+  }
+
+  .rtjc-logo {
+    width: 32px;
+    height: 32px;
+    font-size: 14px;
+  }
+
+  .rtjc-title {
+    font-size: 13px;
+  }
+
+  .rtjc-avatar {
+    width: 30px;
+    height: 30px;
+    font-size: 12px;
+  }
+
+  .rtjc-avatar-img {
+    width: 30px;
+    height: 30px;
+  }
+
+  .profile-dropdown {
+    padding: 12px;
+  }
+
+  .rtjc-modal {
+    width: calc(100% - 16px);
+    margin: 0 8px;
+  }
 }

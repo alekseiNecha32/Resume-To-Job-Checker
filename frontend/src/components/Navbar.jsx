@@ -142,7 +142,7 @@ export default function NavBar() {
                 aria-expanded={showProfile}
               >
                 {displayMe.avatar_url
-                  ? <img src={displayMe.avatar_url} alt="avatar" style={{ width: 40, height: 40, borderRadius: "50%", objectFit: "cover" }} onError={e => { e.target.style.display = "none"; e.target.nextSibling.style.display = ""; }} />
+                  ? <img src={displayMe.avatar_url} alt="avatar" className="rtjc-avatar-img" onError={e => { e.target.style.display = "none"; e.target.nextSibling.style.display = ""; }} />
                   : null}
                 <div className="rtjc-avatar" style={displayMe.avatar_url ? { display: "none" } : {}}>{initials(displayMe.email)}</div>
               </button>
@@ -174,7 +174,7 @@ export default function NavBar() {
                 aria-expanded={showProfile}
               >
                 {me.avatar_url
-                  ? <img src={me.avatar_url} alt="avatar" style={{ width: 40, height: 40, borderRadius: "50%", objectFit: "cover" }} onError={e => { e.target.style.display = "none"; e.target.nextSibling.style.display = ""; }} />
+                  ? <img src={me.avatar_url} alt="avatar" className="rtjc-avatar-img" onError={e => { e.target.style.display = "none"; e.target.nextSibling.style.display = ""; }} />
                   : null}
                 <div className="rtjc-avatar" style={me.avatar_url ? { display: "none" } : {}}>{initials(me.email)}</div>
               </button>

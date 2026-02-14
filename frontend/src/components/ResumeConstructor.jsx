@@ -459,14 +459,7 @@ export default function ResumeConstructor() {
             </div>
 
             {resume && (
-                <div
-                    style={{
-                        display: "grid",
-                        gridTemplateColumns: "1.2fr 1fr",
-                        gap: "1rem",
-                        alignItems: "flex-start",
-                    }}
-                >
+                <div className="ats-results-grid">
                     <div>
                         {/* CHANGED: use a styled header row + button */}
                         <div className="ats-resume-header">
