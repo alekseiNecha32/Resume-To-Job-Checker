@@ -133,7 +133,17 @@ export default function ProfileMenu({ me, onClose, onLogout, onBuyCredits }) {
     <div className="profile-dropdown" ref={ref}>
       <div className="profile-dropdown-inner">
         <div className="profile-header-block">
-          <div className="profile-dropdown-email">{displayMe?.email}</div>
+          <div className="profile-header-top">
+            <div className="profile-dropdown-email">{displayMe?.email}</div>
+            <button
+              type="button"
+              aria-label="Close"
+              className="profile-close-btn"
+              onClick={onClose}
+            >
+              ✕
+            </button>
+          </div>
           {displayMe?.avatar_url && !editing && (
             <img
               src={displayMe.avatar_url}
