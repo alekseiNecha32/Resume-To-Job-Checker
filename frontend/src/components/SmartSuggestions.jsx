@@ -103,7 +103,7 @@ function parseSuggestions(text = "") {
 }
   const onBuyClick = async () => {
     try {
-      const { url } = await createCheckoutSession();
+      const { url } = await createCheckoutSession({ packId: "custom", credits: 7 });
       if (url) window.location.href = url;
     } catch (e) {
       alert(e?.message || "Checkout failed");
