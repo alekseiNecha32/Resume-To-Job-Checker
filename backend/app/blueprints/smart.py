@@ -288,7 +288,7 @@ Requirements:
                 completion = client.responses.create(
                     model="gpt-4.1-mini",
                     input=prompt,
-                    response_format={"type": "json_object"}
+                    text={"format": {"type": "json_object"}}
                 )
                 raw = completion.output[0].content[0].text
                 model_payload = json.loads(raw)

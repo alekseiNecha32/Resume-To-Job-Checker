@@ -28,10 +28,10 @@ const cleanLine = (line) => {
 const parseResume = (text) => {
     const rawLines = text
         .split(/\r?\n/)
-        .map((l) => l.trim())
+        .map((l) => l.replace(/[\u200b\u200c\u200d\u200e\u200f\u00ad\ufeff\u2060\u00a0]/g, "").trim())
         .filter(Boolean);
 
-    const lines = rawLines.map(cleanLine);
+    const lines = rawLines.map(cleanLine).filter(Boolean);
     if (!lines.length) {
         return { name: "", title: "", contact: [], sections: [] };
     }
@@ -64,11 +64,14 @@ const parseResume = (text) => {
                 items: [],
             };
         } else {
-            current.items.push({
-                id: `it-${current.items.length}-${Date.now()}`,
-                type: "bullet",
-                text: cleanLine(line),
-            });
+            const cleaned = cleanLine(line);
+            if (cleaned) {
+                current.items.push({
+                    id: `it-${current.items.length}-${Date.now()}`,
+                    type: "bullet",
+                    text: cleaned,
+                });
+            }
         }
     }
     push();
@@ -112,7 +115,8 @@ export default function ResumeConstructor() {
     const normalizeExtractedText = (text) => {
         return text
             .replace(/^(%Ï\s*)+/gm, "")
-            .replace(/^[•●▪·\-*]+\s+/gm, "");
+            .replace(/^[•●▪·\-*]+\s+/gm, "")
+            .replace(/\n{3,}/g, "\n\n");
     };
 
     const handleFilePick = async (e) => {
@@ -211,17 +215,77 @@ export default function ResumeConstructor() {
         }
     };
 
+    // Find the best-matching section by ID or title keywords
+    const findSectionIdx = (sections, targetId) => {
+        // 1) Exact ID match
+        const exact = sections.findIndex((s) => s.id === targetId);
+        if (exact !== -1) return exact;
+        // 2) Keyword match: "experience" matches "work-history", etc.
+        const aliases = {
+            experience: ["experience", "work", "history", "employment"],
+            projects: ["project", "hackathon"],
+            education: ["education", "certification", "degree"],
+            skills: ["skill", "technical", "technologies"],
+            summary: ["summary", "objective", "profile"],
+        };
+        const target = (targetId || "").toLowerCase();
+        for (const [key, words] of Object.entries(aliases)) {
+            if (words.some((w) => target.includes(w))) {
+                const idx = sections.findIndex((s) =>
+                    words.some((w) => s.id.includes(w) || s.title.toLowerCase().includes(w))
+                );
+                if (idx !== -1) return idx;
+            }
+        }
+        // 3) Partial match on section id/title
+        const partial = sections.findIndex(
+            (s) => s.id.includes(target) || s.title.toLowerCase().includes(target)
+        );
+        if (partial !== -1) return partial;
+        // 4) Default to first section
+        return sections.length > 0 ? 0 : -1;
+    };
+
+    // Find item by ID or by matching originalText
+    const findItemId = (sections, targetItemId, originalText) => {
+        for (const section of sections) {
+            // Exact ID match
+            const byId = section.items.find((it) => it.id === targetItemId);
+            if (byId) return byId.id;
+            // Text similarity match
+            if (originalText) {
+                const norm = (s) => (s || "").toLowerCase().replace(/\s+/g, " ").trim();
+                const target = norm(originalText);
+                const byText = section.items.find(
+                    (it) => norm(it.text) === target || norm(it.text).includes(target) || target.includes(norm(it.text))
+                );
+                if (byText) return byText.id;
+            }
+        }
+        return null;
+    };
+
     const handleAcceptSuggestion = (suggestion) => {
         if (!resume) return;
+
+        const timestamp = Date.now();
+        let newId = null;
+        if (suggestion.type === "add_bullet") {
+            newId = `item-${timestamp}`;
+        } else if (suggestion.type === "rewrite_bullet") {
+            // Pre-resolve the actual item ID from parsed resume
+            newId = findItemId(resume.sections, suggestion.targetItemId, suggestion.originalText);
+        } else if (suggestion.type === "project_idea") {
+            newId = `proj-${timestamp}`;
+        }
+
         setResume((prev) => {
             if (!prev) return prev;
             const updated = { ...prev, sections: prev.sections.map((s) => ({ ...s, items: [...s.items] })) };
-            let newId = null;
 
             if (suggestion.type === "add_bullet") {
-                const idx = updated.sections.findIndex((s) => s.id === suggestion.targetSectionId);
+                const idx = findSectionIdx(updated.sections, suggestion.targetSectionId);
                 if (idx === -1) return prev;
-                newId = `item-${Date.now()}`;
                 updated.sections[idx].items.push({
                     id: newId,
                     type: "bullet",
@@ -229,19 +293,19 @@ export default function ResumeConstructor() {
                 });
             }
 
-            if (suggestion.type === "rewrite_bullet") {
+            if (suggestion.type === "rewrite_bullet" && newId) {
                 updated.sections = updated.sections.map((section) => ({
                     ...section,
                     items: section.items.map((it) =>
-                        it.id === suggestion.targetItemId
-                            ? ((newId = it.id), { ...it, text: suggestion.suggestedText })
+                        it.id === newId
+                            ? { ...it, text: suggestion.suggestedText }
                             : it
                     ),
                 }));
             }
 
             if (suggestion.type === "project_idea") {
-                let idx = updated.sections.findIndex((s) => s.id === suggestion.targetSectionId);
+                let idx = findSectionIdx(updated.sections, suggestion.targetSectionId);
                 if (idx === -1) {
                     updated.sections = [
                         ...updated.sections,
@@ -249,7 +313,6 @@ export default function ResumeConstructor() {
                     ];
                     idx = updated.sections.length - 1;
                 }
-                newId = `proj-${Date.now()}`;
                 updated.sections[idx].items.push({
                     id: newId,
                     type: "bullet",
@@ -257,16 +320,21 @@ export default function ResumeConstructor() {
                 });
             }
 
-            // highlight the affected item briefly
-            if (newId) {
-                setHighlightedIds((prevIds) => [...prevIds.filter((id) => id !== newId), newId]);
-                setTimeout(() => {
-                    setHighlightedIds((prevIds) => prevIds.filter((id) => id !== newId));
-                }, 5000);
-            }
-
             return updated;
         });
+
+        // Highlight and scroll
+        if (newId) {
+            setHighlightedIds((prevIds) => [...prevIds.filter((id) => id !== newId), newId]);
+            setTimeout(() => {
+                const el = document.querySelector(`[data-item-id="${newId}"]`);
+                if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+            }, 100);
+            setTimeout(() => {
+                setHighlightedIds((prevIds) => prevIds.filter((id) => id !== newId));
+            }, 5000);
+        }
+
         setSuggestions((prev) => prev.filter((s) => s.id !== suggestion.id));
     };
 

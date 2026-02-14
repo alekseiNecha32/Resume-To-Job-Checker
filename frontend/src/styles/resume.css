@@ -302,12 +302,11 @@
   color: #111827;
 }
 .rp-highlight {
-  background: #fff8d6;
-  transition: background 0.3s ease;
-}
-.rp-highlight {
-  background: #fff8d6;
-  transition: background 0.3s ease;
+  background: #fef08a;
+  border-left: 3px solid #eab308;
+  padding-left: 6px;
+  border-radius: 4px;
+  transition: background 1s ease;
 }
 /* Main card */
 .ats-main-card {

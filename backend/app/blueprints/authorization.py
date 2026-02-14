@@ -131,7 +131,7 @@ def update_profile():
 
         bucket = os.getenv("SUPABASE_AVATAR_BUCKET", "avatars")
         try:
-            supabase.storage.create_bucket(bucket, {"public": False})
+            supabase.storage.create_bucket(bucket, {"public": True})
         except Exception:
             pass
 
@@ -139,34 +139,34 @@ def update_profile():
         mime = mimetypes.guess_type(avatar_file.filename or "")[0] or "application/octet-stream"
         path = f"{uid}/{int(time.time())}{ext}"
         data = avatar_file.read()
-        
+
         try:
             supabase.storage.from_(bucket).upload(path, data, {"content-type": mime})
         except Exception as e:
             logger.error(f"Storage upload failed: {e}")
             return jsonify({"error": f"upload_failed: {str(e)}"}), 500
 
-        # Get signed URL
+        # Get public URL (no expiry)
         try:
-            signed = supabase.storage.from_(bucket).create_signed_url(path, 60 * 60 * 24 * 30)
-            if isinstance(signed, dict):
+            result = supabase.storage.from_(bucket).get_public_url(path)
+            if isinstance(result, dict):
                 avatar_url = (
-                    signed.get("signedURL")
-                    or signed.get("signedUrl")
-                    or signed.get("signed_url")
-                    or (isinstance(signed.get("data"), dict) and (
-                        signed["data"].get("signedURL") or signed["data"].get("signedUrl") or signed["data"].get("signed_url")
+                    result.get("publicURL")
+                    or result.get("publicUrl")
+                    or result.get("public_url")
+                    or (isinstance(result.get("data"), dict) and (
+                        result["data"].get("publicURL") or result["data"].get("publicUrl") or result["data"].get("public_url")
                     ))
                 )
             else:
-                avatar_url = str(signed) if signed else ""
-            
+                avatar_url = str(result) if result else ""
+
             if not avatar_url:
-                logger.error("No signed URL returned")
-                return jsonify({"error": "signed_url_failed"}), 500
+                logger.error("No public URL returned")
+                return jsonify({"error": "public_url_failed"}), 500
         except Exception as e:
-            logger.error(f"Signed URL failed: {e}")
-            return jsonify({"error": f"signed_url_error: {str(e)}"}), 500
+            logger.error(f"Public URL failed: {e}")
+            return jsonify({"error": f"public_url_error: {str(e)}"}), 500
 
         # Update database
         update = {"user_id": uid, "avatar_url": avatar_url}

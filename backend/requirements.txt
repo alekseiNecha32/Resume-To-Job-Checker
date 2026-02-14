@@ -4,7 +4,7 @@ python-dotenv==1.0.1
 scikit-learn==1.5.2
 numpy==2.1.2
 joblib==1.4.2
-pdfminer.six==20240706
+PyMuPDF
 python-docx==1.1.2
 sentence-transformers
 supabase
