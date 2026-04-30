@@ -30,25 +30,21 @@ def create_app():
 
 
     CORS(
-    app,
-    resources={
-        r"/api/*": {
-            "origins": [
-                "http://localhost:5173",
-                "http://127.0.0.1:5173",
-                "https://resume-to-job-checker-5.onrender.com",
-                "https://www.resume-constructor.com",
-                "https://resume-constructor.com",
-                
-               
-            ],
-            "supports_credentials": True,
-            "methods": ["GET", "POST", "OPTIONS"],
-            "expose_headers": ["Content-Type", "Authorization"],
-            "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"],
+        app,
+        resources={
+            r"/api/*": {
+                "origins": [
+                    "http://localhost:5173",
+                    "http://127.0.0.1:5173",
+                    "https://www.resume-constructor.com",
+                    "https://resume-constructor.com",
+                ],
+                "supports_credentials": True,
+                "methods": ["GET", "POST", "OPTIONS"],
+                "allow_headers": ["Content-Type", "Authorization", "X-Requested-With", "X-User-Id"],
+            },
         },
-    },
-)
+    )
 
     
     app.register_blueprint(api_bp)  
