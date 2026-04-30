@@ -33,8 +33,7 @@ def embed_text(text: str) -> np.ndarray:
             return np.zeros((model.get_sentence_embedding_dimension(),), dtype=np.float32)
         embeddings = model.encode(chunks, normalize_embeddings=True)
         return np.mean(embeddings, axis=0)
-    except Exception as e:
-        print(f"[text_utils] Embedding failed: {e}")
+    except Exception:
         return np.zeros((384,), dtype=np.float32)
 
 def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:

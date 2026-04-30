@@ -23,7 +23,6 @@ def get_emb():
 def get_kw():
     global _KW
     if _KW is None:
-        print("Loading KeyBERT (shared model)...")
         _KW = KeyBERT(model=get_emb())
     return _KW
 

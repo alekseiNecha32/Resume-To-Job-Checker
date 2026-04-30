@@ -186,7 +186,6 @@ def analyze():
         job_text = d.get("job_text", "")
         job_title = d.get("job_title", "")
 
-        print(f"Starting smart analysis for user {uid}...")
         res = smart_predict_resume_improvements(
             resume_text=resume_text,
             job_text=job_text,
