@@ -60,16 +60,6 @@ class SmartAdvice:
     ready_bullets: List[str]
     rewrite_hints: List[str]
 
-def _embed(text: str):
-    model = get_emb()
-    return model.encode([text], normalize_embeddings=True)
-
-
-
-def _sim(a: str, b: str) -> float:
-    if not a or not b:
-        return 0.0
-    return float(util.cos_sim(_embed(a), _embed(b))[0][0])
 
 
 def _keybert_terms(text: str, top_n=12) -> List[str]:
@@ -399,8 +389,16 @@ def _compose_auto_suggestions(job_text: str, resume_text: str,
 def smart_predict_resume_improvements(resume_text: str, job_text: str, job_title: str = "") -> SmartAdvice:
     r = normalize(resume_text); j = normalize(job_text); t = normalize(job_title or "")
 
-    sim_rj = _sim(r, j)
-    sim_rt = _sim(r, t) if t else 0.0
+    model = get_emb()
+
+    # Encode r, j, t in one batch — reused for all similarity computations below
+    base_texts = [r, j] + ([t] if t else [])
+    base_vecs = model.encode(base_texts, normalize_embeddings=True)
+    r_vec, j_vec = base_vecs[0], base_vecs[1]
+    t_vec = base_vecs[2] if t else None
+
+    sim_rj = float(np.dot(r_vec, j_vec))
+    sim_rt = float(np.dot(r_vec, t_vec)) if t_vec is not None else 0.0
 
     jd_terms  = list(dict.fromkeys(_keybert_terms(j) + _tfidf_terms(j, r)))
     jd_skills = _expand_to_canon(jd_terms)
@@ -409,8 +407,14 @@ def smart_predict_resume_improvements(resume_text: str, job_text: str, job_title
     for s in jd_skills:
         (present if s in r else missing).append(s)
 
-    crit = [(s, max(_sim(s, j), _sim(s, t) if t else 0.0)) for s in missing]
-    crit.sort(key=lambda x: -x[1])
+    # Batch encode all missing skills once instead of calling _sim() per skill
+    if missing:
+        skill_vecs = model.encode(missing, normalize_embeddings=True)
+        sims_j = skill_vecs @ j_vec
+        crit_scores = sims_j if t_vec is None else np.maximum(sims_j, skill_vecs @ t_vec)
+        crit = sorted(zip(missing, crit_scores.tolist()), key=lambda x: -x[1])
+    else:
+        crit = []
     critical_gaps = [s for s, _ in crit[:6]]
 
     coverage = len(present) / max(1, (len(present) + len(missing)))
