@@ -22,7 +22,7 @@ if SUPABASE_URL and SUPABASE_KEY:
     try:
         SUPABASE = create_client(SUPABASE_URL, SUPABASE_KEY)
     except Exception:
-        current_app.logger.exception("Failed to create supabase client")
+        pass
 
 PACKS = {
     "pro": {"credits": 10, "amount_dollars": 5, "interval": "month"},
@@ -54,10 +54,8 @@ def _resolve_user_id(req):
                         uid = user.get("id") if isinstance(user, dict) else getattr(user, "id", None)
                         if uid:
                             return uid
-
-                current_app.logger.warning("Could not extract user_id from supabase response: %s", type(resp))
         except Exception as e:
-            current_app.logger.warning("supabase get_user failed: %s", str(e))
+            current_app.logger.warning("supabase get_user failed: %s", type(e).__name__)
 
     return req.headers.get("X-User-Id")
 
@@ -80,10 +78,7 @@ def checkout():
     user_id = _resolve_user_id(request) or ""
 
     if not user_id:
-        current_app.logger.error("checkout request: NO USER_ID RESOLVED - auth header: %s", request.headers.get("Authorization", "")[:50] if request.headers.get("Authorization") else "None")
         return jsonify({"error": "unauthorized", "message": "Could not resolve user identity"}), 401
-
-    current_app.logger.info("checkout request: resolved user_id=%s body=%s", user_id, body)
 
     origin = (request.headers.get("Origin") or FRONTEND_URL or "").rstrip("/")
     if not origin:
@@ -147,11 +142,10 @@ def checkout():
                 cancel_url=f"{origin}/pay/cancel",
             )
 
-        current_app.logger.info("created stripe session id=%s url=%s mode=%s", session.id, session.url, session.mode)
         return jsonify({"url": session.url}), 200
-    except stripe.error.StripeError as se:
+    except stripe.error.StripeError:
         current_app.logger.exception("Stripe error during checkout")
-        return jsonify({"error": "stripe_error", "message": str(se)}), 502
+        return jsonify({"error": "stripe_error"}), 502
     except Exception:
         current_app.logger.exception("checkout error")
         return jsonify({"error": "internal_server_error"}), 500
@@ -160,23 +154,19 @@ def checkout():
 def _grant_credits(uid, credits, stripe_id, amount_cents, status="COMPLETED"):
     """Helper to grant credits and record purchase. Returns True on success."""
     if not SUPABASE or not uid:
-        current_app.logger.warning("Cannot grant credits: SUPABASE=%s uid=%s", bool(SUPABASE), uid)
+        current_app.logger.warning("Cannot grant credits: supabase or uid missing")
         return False
 
     try:
-        # 1) Ensure the profile row exists before anything else
         try:
             profile_check = SUPABASE.table("profiles").select("user_id").eq("user_id", uid).execute()
             profile_data = getattr(profile_check, "data", None) or (profile_check.get("data") if isinstance(profile_check, dict) else None)
             if not profile_data:
-                current_app.logger.info("Profile not found for user %s, creating one", uid)
                 SUPABASE.table("profiles").insert({"user_id": uid, "credits": 0}).execute()
         except Exception as profile_err:
-            # Ignore duplicate key errors (profile already exists)
             if "duplicate" not in str(profile_err).lower() and "23505" not in str(profile_err):
-                current_app.logger.warning("Profile check/create failed for user %s: %s", uid, profile_err)
+                current_app.logger.warning("Profile check/create failed: %s", type(profile_err).__name__)
 
-        # 2) Record the purchase (idempotency: skip if already exists)
         try:
             SUPABASE.table("purchases").insert({
                 "user_id": uid,
@@ -185,14 +175,11 @@ def _grant_credits(uid, credits, stripe_id, amount_cents, status="COMPLETED"):
                 "status": status,
                 "stripe_session_id": stripe_id,
             }).execute()
-            current_app.logger.info("Inserted purchase record for %s user %s credits %s", stripe_id, uid, credits)
         except Exception as insert_err:
             if "duplicate" in str(insert_err).lower() or "unique" in str(insert_err).lower() or "23505" in str(insert_err):
-                current_app.logger.info("Purchase %s already exists, skipping credit grant", stripe_id)
                 return True
             raise
 
-        # 3) Read current credits and add new ones
         current_credits = 0
         try:
             cur = SUPABASE.table("profiles").select("credits").eq("user_id", uid).limit(1).execute()
@@ -202,11 +189,10 @@ def _grant_credits(uid, credits, stripe_id, amount_cents, status="COMPLETED"):
             elif cur_data and isinstance(cur_data, dict):
                 current_credits = int(cur_data.get("credits") or 0)
         except Exception as read_err:
-            current_app.logger.warning("Could not read current credits for user %s: %s", uid, read_err)
+            current_app.logger.warning("Could not read current credits: %s", type(read_err).__name__)
 
         new_credits = current_credits + credits
         SUPABASE.table("profiles").update({"credits": new_credits}).eq("user_id", uid).execute()
-        current_app.logger.info("Updated user %s credits from %s to %s", uid, current_credits, new_credits)
         return True
     except Exception:
         current_app.logger.exception("Failed to grant credits")
@@ -216,7 +202,7 @@ def _grant_credits(uid, credits, stripe_id, amount_cents, status="COMPLETED"):
 def _update_subscription_status(uid, subscription_id, status, period_end=None):
     """Update user's subscription info in profiles table."""
     if not SUPABASE or not uid:
-        current_app.logger.warning("Cannot update subscription: SUPABASE=%s uid=%s", bool(SUPABASE), uid)
+        current_app.logger.warning("Cannot update subscription: supabase or uid missing")
         return
     try:
         update_data = {
@@ -227,7 +213,6 @@ def _update_subscription_status(uid, subscription_id, status, period_end=None):
             update_data["subscription_period_end"] = period_end
 
         SUPABASE.table("profiles").update(update_data).eq("user_id", uid).execute()
-        current_app.logger.info("Updated subscription status for user %s: %s (%s)", uid, status, subscription_id)
     except Exception:
         current_app.logger.exception("Failed to update subscription status")
 
@@ -246,14 +231,6 @@ def webhook():
     event = None
 
     try:
-        current_app.logger.debug(
-            "Stripe webhook raw payload (trim): %s",
-            (payload.decode("utf-8", "replace")[:2000] if payload else ""),
-        )
-    except Exception:
-        current_app.logger.debug("Stripe webhook raw payload (binary) present")
-
-    try:
         if STRIPE_WEBHOOK_SECRET and sig_header:
             event = stripe.Webhook.construct_event(payload, sig_header, STRIPE_WEBHOOK_SECRET)
         else:
@@ -269,12 +246,7 @@ def webhook():
         session = event["data"]["object"]
         stripe_session_id = session.get("id")
         subscription_id = session.get("subscription")
-        mode = session.get("mode")  # "subscription" or "payment"
-
-        current_app.logger.info(
-            "checkout.session.completed: id=%s, mode=%s, subscription=%s, metadata=%s",
-            stripe_session_id, mode, subscription_id, session.get("metadata"),
-        )
+        mode = session.get("mode")
 
         metadata = session.get("metadata", {}) or {}
         uid = metadata.get("user_id")
@@ -284,8 +256,8 @@ def webhook():
             try:
                 sub = stripe.Subscription.retrieve(subscription_id)
                 period_end = getattr(sub, "current_period_end", None) or getattr(sub, "cancel_at", None)
-            except Exception as e:
-                current_app.logger.warning("Could not retrieve subscription %s for period_end: %s", subscription_id, e)
+            except Exception:
+                current_app.logger.warning("Could not retrieve subscription for period_end")
             _update_subscription_status(uid, subscription_id, "active", period_end)
 
         elif mode == "payment" and uid:
@@ -303,7 +275,6 @@ def webhook():
                         already = getattr(res, "data", None) or (res.get("data") if isinstance(res, dict) else None)
                         if already:
                             already_processed = True
-                            current_app.logger.info("Session %s already processed, skipping", stripe_session_id)
                     except Exception:
                         current_app.logger.exception("Failed idempotency check")
 
@@ -317,13 +288,7 @@ def webhook():
         amount_paid = int(invoice.get("amount_paid") or 0)
         billing_reason = invoice.get("billing_reason")
 
-        current_app.logger.info(
-            "invoice.paid: id=%s, subscription=%s, amount=%s, billing_reason=%s",
-            invoice_id, subscription_id, amount_paid, billing_reason,
-        )
-
         if billing_reason == "subscription_create":
-            current_app.logger.info("Skipping initial subscription invoice %s", invoice_id)
             return jsonify({"received": True}), 200
 
         if SUPABASE:
@@ -331,7 +296,6 @@ def webhook():
                 res = SUPABASE.table("purchases").select("id").eq("stripe_session_id", invoice_id).limit(1).execute()
                 already = getattr(res, "data", None) or (res.get("data") if isinstance(res, dict) else None)
                 if already:
-                    current_app.logger.info("Invoice %s already processed, skipping", invoice_id)
                     return jsonify({"received": True}), 200
             except Exception:
                 current_app.logger.exception("Failed idempotency check")
@@ -350,25 +314,20 @@ def webhook():
                 if credits_str:
                     credits = int(credits_str)
             except Exception:
-                current_app.logger.exception("Failed to retrieve subscription %s", subscription_id)
+                current_app.logger.exception("Failed to retrieve subscription")
 
         if uid and credits > 0:
             _grant_credits(uid, credits, invoice_id, amount_paid, "SUBSCRIPTION_RENEWAL")
             if subscription_id:
                 _update_subscription_status(uid, subscription_id, "active", period_end)
         else:
-            current_app.logger.warning("Cannot grant credits: uid=%s credits=%s", uid, credits)
+            current_app.logger.warning("Cannot grant credits: uid or credits missing")
 
     elif event_type == "customer.subscription.deleted":
         subscription = event["data"]["object"]
         subscription_id = subscription.get("id")
         metadata = subscription.get("metadata", {}) or {}
         uid = metadata.get("user_id")
-
-        current_app.logger.info(
-            "customer.subscription.deleted: id=%s, user=%s",
-            subscription_id, uid,
-        )
 
         if uid:
             _update_subscription_status(uid, subscription_id, "cancelled")
@@ -405,14 +364,12 @@ def get_subscription():
                             _update_subscription_status(user_id, None, "cancelled")
                             status = "cancelled"
                             subscription_id = None
-                            current_app.logger.info("Synced cancelled status for user %s", user_id)
                         elif not period_end:
                             period_end = getattr(sub, "current_period_end", None) or getattr(sub, "cancel_at", None)
                             if period_end:
                                 _update_subscription_status(user_id, subscription_id, status, period_end)
-                                current_app.logger.info("Refreshed period_end for user %s: %s", user_id, period_end)
-                    except Exception as e:
-                        current_app.logger.exception("Failed to fetch subscription %s from Stripe: %s", subscription_id, e)
+                    except Exception:
+                        current_app.logger.exception("Failed to fetch subscription from Stripe")
 
                 return jsonify({
                     "subscription_id": subscription_id,
@@ -448,14 +405,12 @@ def cancel_subscription():
 
         sub = stripe.Subscription.modify(subscription_id, cancel_at_period_end=True)
         period_end = getattr(sub, "current_period_end", None) or getattr(sub, "cancel_at", None)
-        current_app.logger.info("Cancel subscription period_end=%s", period_end)
         _update_subscription_status(user_id, subscription_id, "cancelling", period_end)
 
-        current_app.logger.info("Subscription %s set to cancel at period end for user %s", subscription_id, user_id)
         return jsonify({"ok": True, "message": "Subscription will cancel at end of billing period", "period_end": period_end}), 200
-    except stripe.error.StripeError as se:
+    except stripe.error.StripeError:
         current_app.logger.exception("Stripe error cancelling subscription")
-        return jsonify({"error": "stripe_error", "message": str(se)}), 502
+        return jsonify({"error": "stripe_error"}), 502
     except Exception:
         current_app.logger.exception("Failed to cancel subscription")
         return jsonify({"error": "internal_error"}), 500
@@ -490,21 +445,19 @@ def sync_subscription():
                 credits = 0
             amount_total = int(session.amount_total or 0)
 
+            already_processed = False
             if credits > 0:
-                already_processed = False
                 if SUPABASE:
                     try:
                         res = SUPABASE.table("purchases").select("id").eq("stripe_session_id", session_id).limit(1).execute()
                         already = getattr(res, "data", None) or (res.get("data") if isinstance(res, dict) else None)
                         if already:
                             already_processed = True
-                            current_app.logger.info("Session %s already processed via sync", session_id)
                     except Exception:
                         current_app.logger.exception("Failed idempotency check in sync")
 
                 if not already_processed:
                     _grant_credits(user_id, credits, session_id, amount_total, "ONE_TIME_PURCHASE_SYNC")
-                    current_app.logger.info("Granted %s credits to user %s via sync (one-time)", credits, user_id)
 
             return jsonify({"ok": True, "credits_granted": credits if not already_processed else 0}), 200
 
@@ -530,17 +483,13 @@ def sync_subscription():
                 if not already:
                     _grant_credits(user_id, credits, subscription_id, amount_total, "SUBSCRIPTION_INITIAL")
                     credits_granted = credits
-                    current_app.logger.info("Granted %s credits to user %s for subscription %s", credits, user_id, subscription_id)
-                else:
-                    current_app.logger.info("Subscription %s already processed, skipping credit grant", subscription_id)
             except Exception:
                 current_app.logger.exception("Failed to process credits in sync")
 
-        current_app.logger.info("Synced subscription %s for user %s from session %s", subscription_id, user_id, session_id)
         return jsonify({"ok": True, "subscription_id": subscription_id, "status": "active", "period_end": period_end, "credits_granted": credits_granted}), 200
-    except stripe.error.StripeError as se:
+    except stripe.error.StripeError:
         current_app.logger.exception("Stripe error syncing subscription")
-        return jsonify({"error": "stripe_error", "message": str(se)}), 502
+        return jsonify({"error": "stripe_error"}), 502
     except Exception:
         current_app.logger.exception("Failed to sync subscription")
         return jsonify({"error": "internal_error"}), 500
@@ -584,17 +533,16 @@ def reactivate_subscription():
         stripe.Subscription.modify(subscription_id, cancel_at_period_end=False)
         _update_subscription_status(user_id, subscription_id, "active")
 
-        current_app.logger.info("Subscription %s reactivated for user %s", subscription_id, user_id)
         return jsonify({"ok": True, "message": "Subscription reactivated"}), 200
     except stripe.error.InvalidRequestError as se:
         if "canceled" in str(se).lower():
             _update_subscription_status(user_id, None, "cancelled")
             return jsonify({"error": "subscription_already_cancelled", "message": "This subscription has ended. Please subscribe again."}), 400
         current_app.logger.exception("Stripe error reactivating subscription")
-        return jsonify({"error": "stripe_error", "message": str(se)}), 502
-    except stripe.error.StripeError as se:
+        return jsonify({"error": "stripe_error"}), 502
+    except stripe.error.StripeError:
         current_app.logger.exception("Stripe error reactivating subscription")
-        return jsonify({"error": "stripe_error", "message": str(se)}), 502
+        return jsonify({"error": "stripe_error"}), 502
     except Exception:
         current_app.logger.exception("Failed to reactivate subscription")
         return jsonify({"error": "internal_error"}), 500
