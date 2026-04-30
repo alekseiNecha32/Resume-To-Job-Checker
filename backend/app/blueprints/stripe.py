@@ -147,8 +147,8 @@ def checkout():
                 cancel_url=f"{origin}/pay/cancel",
             )
 
-        current_app.logger.info("created stripe session id=%s url=%s mode=%s", session.get("id"), session.get("url"), session.get("mode"))
-        return jsonify({"url": session.get("url")}), 200
+        current_app.logger.info("created stripe session id=%s url=%s mode=%s", session.id, session.url, session.mode)
+        return jsonify({"url": session.url}), 200
     except stripe.error.StripeError as se:
         current_app.logger.exception("Stripe error during checkout")
         return jsonify({"error": "stripe_error", "message": str(se)}), 502
@@ -479,16 +479,16 @@ def sync_subscription():
 
     try:
         session = stripe.checkout.Session.retrieve(session_id)
-        subscription_id = session.get("subscription")
-        mode = session.get("mode")
-        metadata = session.get("metadata", {}) or {}
+        subscription_id = session.subscription
+        mode = session.mode
+        metadata = dict(session.metadata or {})
 
         if mode == "payment":
             try:
                 credits = int(metadata.get("credits", "0") or 0)
             except Exception:
                 credits = 0
-            amount_total = int(session.get("amount_total") or 0)
+            amount_total = int(session.amount_total or 0)
 
             if credits > 0:
                 already_processed = False
@@ -512,7 +512,7 @@ def sync_subscription():
             return jsonify({"error": "no_subscription_in_session"}), 400
 
         sub = stripe.Subscription.retrieve(subscription_id)
-        period_end = sub.get("current_period_end")
+        period_end = getattr(sub, "current_period_end", None)
 
         _update_subscription_status(user_id, subscription_id, "active", period_end)
 
@@ -520,7 +520,7 @@ def sync_subscription():
             credits = int(metadata.get("credits", "0") or 0)
         except Exception:
             credits = PACKS.get("pro", {}).get("credits", 10)
-        amount_total = int(session.get("amount_total") or 0)
+        amount_total = int(session.amount_total or 0)
 
         credits_granted = 0
         if credits > 0 and SUPABASE:
