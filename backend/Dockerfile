@@ -7,9 +7,6 @@ ENV PYTHONPATH=/app
 ENV HF_HOME=/app/.cache/huggingface
 ENV TRANSFORMERS_CACHE=/app/.cache/huggingface/transformers
 ENV SENTENCE_TRANSFORMERS_HOME=/app/.cache/sentence-transformers
-# Prevent any HuggingFace network calls at runtime — use only the baked-in model
-ENV TRANSFORMERS_OFFLINE=1
-ENV HF_DATASETS_OFFLINE=1
 
 WORKDIR /app
 
@@ -18,8 +15,12 @@ RUN apt-get update && apt-get install -y build-essential pandoc && rm -rf /var/l
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Bake model into the image at build time
+# Bake model into the image at build time (offline flags not set yet so download succeeds)
 RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')"
+
+# Prevent any HuggingFace network calls at runtime — use only the baked-in model
+ENV TRANSFORMERS_OFFLINE=1
+ENV HF_DATASETS_OFFLINE=1
 
 COPY . .
 
