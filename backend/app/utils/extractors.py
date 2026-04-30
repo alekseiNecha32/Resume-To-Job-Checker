@@ -15,7 +15,7 @@ def sniff_ext(filename: str) -> Optional[Allowed]:
 
 _INVISIBLE_RE = re.compile(
     r'[\u200b\u200c\u200d\u200e\u200f\u00ad\ufeff\u2060\u00a0\u2000-\u200a\u202f\u205f\u3000\x0c]'
-)
+) 
 
 def _clean_line(line: str) -> str:
     """Strip whitespace and invisible Unicode characters."""

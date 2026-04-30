@@ -12,10 +12,12 @@ from app.blueprints.api import api_bp
 from app.blueprints.smart import smart_bp
 from .blueprints.stripe import stripe_bp
 from openai import OpenAI
+from app.utils.embeddings import get_embedder
 
 def create_app():
     load_dotenv()
     app = Flask(__name__)
+    get_embedder()  # load SentenceTransformer at startup, not on first request
     app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev")
 
     # Reduce noisy logs from httpx/stripe
@@ -59,5 +61,10 @@ def create_app():
     @app.get("/health")
     def health():
         return {"status": "ok"}
+
+    @app.get("/_ah/warmup")
+    def warmup():
+        get_embedder()
+        return {"status": "warm"}
 
     return app
