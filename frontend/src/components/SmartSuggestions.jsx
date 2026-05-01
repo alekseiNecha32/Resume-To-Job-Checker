@@ -1,17 +1,16 @@
 import { useState, useEffect } from "react";
-import { smartAnalyze, getMe, createCheckoutSession } from "../services/apiClient";
+import { smartAnalyze, smartEnrich, getMe, createCheckoutSession } from "../services/apiClient";
 import AuthBox from "./AuthBox";
 
 
 export default function SmartSuggestions({ resumeText, jobText, jobTitle, data: initialData = null }) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const [data, setData] = useState(initialData);
   const [err, setErr] = useState(null);
   const [needAuth, setNeedAuth] = useState(false);
-const [legoResume, setLegoResume] = useState(null);       // NEW
-const [legoSuggestions, setLegoSuggestions] = useState([]); // NEW
-  // If parent passes data, open panel and display it (do NOT call smartAnalyze again)
+
   useEffect(() => {
     if (initialData) {
       setData(initialData);
@@ -22,12 +21,7 @@ const [legoSuggestions, setLegoSuggestions] = useState([]); // NEW
   }, [initialData]);
 
   const run = async () => {
-    // If caller already provided data, just open the panel
-    if (initialData) {
-      setOpen(true);
-      return;
-    }
-
+    if (initialData) { setOpen(true); return; }
     if (loading) return;
     if (!resumeText || !jobText) {
       setOpen(true);
@@ -42,36 +36,42 @@ const [legoSuggestions, setLegoSuggestions] = useState([]); // NEW
     setLoading(true);
 
     try {
-      // auth check
       const me = await getMe();
-      if (!me) {
-        setNeedAuth(true);
-        setLoading(false);
-        return;
-      }
+      if (!me) { setNeedAuth(true); setLoading(false); return; }
 
-      // call analysis
-      const res = await smartAnalyze({ resumeText, jobText, jobTitle });
-      // smartAnalyze returns { analysis, profile } in your apiClient; support both shapes:
-      const payload = res?.analysis ?? res ?? null;
-      setData(payload);
+      // Phase 1 — ML results (fast)
+      const mlResult = await smartAnalyze({ resumeText, jobText, jobTitle });
+      setData(mlResult);
+      setLoading(false);
+
+      // Phase 2 — OpenAI suggestions (slower, runs in background)
+      setLoadingSuggestions(true);
+      try {
+        const enriched = await smartEnrich({
+          resumeText,
+          jobText,
+          jobTitle,
+          presentSkills: mlResult?.present_skills || [],
+          missingSkills: mlResult?.missing_skills || [],
+          criticalGaps: mlResult?.critical_gaps || [],
+        });
+        if (enriched) {
+          setData(prev => ({ ...prev, ...enriched }));
+        }
+      } catch {
+        // suggestions failed silently — ML results already shown
+      } finally {
+        setLoadingSuggestions(false);
+      }
     } catch (e) {
       const msg = String(e?.message || "Something went wrong");
-
       if (msg.toLowerCase().includes("sign in")) {
-        setNeedAuth(true);
-        setData(null);
-      } else if (
-        msg.toLowerCase().includes("no credits") ||
-        msg.toLowerCase().includes("insufficient")
-      ) {
-        setErr("You’re out of credits.");
-        setData(null);
+        setNeedAuth(true); setData(null);
+      } else if (msg.toLowerCase().includes("no_credits") || msg.toLowerCase().includes("no credits") || msg.toLowerCase().includes("insufficient")) {
+        setErr("You’re out of credits."); setData(null);
       } else {
-        setErr(msg);
-        setData(null);
+        setErr(msg); setData(null);
       }
-    } finally {
       setLoading(false);
     }
   };
@@ -193,6 +193,13 @@ function parseSuggestions(text = "") {
               </div>
             )}
 
+            {!err && !loading && loadingSuggestions && !data && (
+              <div className="mt-6 flex flex-col items-center gap-3 text-sm opacity-80">
+                <div className="sa-spinner" aria-hidden />
+                <div>Generating AI suggestions…</div>
+              </div>
+            )}
+
             {needAuth && (
               <div className="mt-4">
                 <AuthBox
@@ -288,9 +295,10 @@ function parseSuggestions(text = "") {
                         </li>
                       ))}
                     </ul>
-                  ) : data.personal_suggestions_error ? (
-                    <div className="text-xs p-2 rounded bg-amber-100 text-amber-800">
-                      {data.personal_suggestions_error}
+                  ) : loadingSuggestions ? (
+                    <div className="mt-3 flex items-center gap-2 text-sm opacity-70">
+                      <div className="sa-spinner sa-spinner-sm" aria-hidden />
+                      <span>Generating AI suggestions…</span>
                     </div>
                   ) : (
                     <div className="text-xs text-muted-foreground">

@@ -3,7 +3,7 @@ from typing import List, Dict, Tuple
 import re
 
 import numpy as np
-from sentence_transformers import util
+
 from app.utils.embeddings import get_embedder
 
 from keybert import KeyBERT
@@ -93,6 +93,31 @@ NOISE_SUBSTRINGS = [
     # misc non-actionable
     "country qualifications", "must be able", "strong communication", "fast-paced", "self-starter"
 ]
+
+# Generic English words that are never skills on their own
+_GENERIC_SINGLE_WORDS = {
+    "analyze", "analysis", "analytical", "analysts", "analyst", "analyze",
+    "develop", "development", "developers", "developer",
+    "experience", "experienced", "familiarity", "familiar",
+    "fundamentals", "functional", "functions", "function",
+    "including", "included", "artifacts", "accordance",
+    "maintain", "maintained", "maintaining",
+    "understand", "understanding", "knowledge",
+    "work", "working", "works", "team", "teams",
+    "strong", "ability", "skills", "skill", "good",
+    "internship", "position", "role", "roles", "job",
+    "years", "year", "month", "months",
+    "business", "businesses", "clients", "client",
+    "problem", "problems", "solution", "solutions",
+    "process", "processes", "manage", "management",
+    "provide", "providing", "support", "supporting",
+    "using", "use", "used", "tools", "tool",
+    "need", "needs", "required", "require", "requirements",
+    "ensure", "ensuring", "review", "reviews",
+    "design", "designs", "build", "builds",
+    "implement", "implementation", "create", "creating",
+    "responsible", "responsibilities", "perform", "performing",
+}
 KEYWORD_FAMILIES: Dict[str, List[str]] = {
     "edc_medidata_rave": [
         "medidata",
@@ -111,12 +136,17 @@ def _is_noisy_phrase(p: str) -> bool:
     p_l = p.lower().strip()
     if len(p_l) <= 2:
         return True
-
     for sub in NOISE_SUBSTRINGS:
         if sub in p_l:
             return True
-        
     if len(p_l.split()) > 4 and not re.search(r"[0-9#\.+\-/]", p_l):
+        return True
+    # Single generic English word that is not a skill
+    words = p_l.split()
+    if len(words) == 1 and p_l in _GENERIC_SINGLE_WORDS:
+        return True
+    # Multi-word phrase where ALL words are generic
+    if len(words) >= 2 and all(w in _GENERIC_SINGLE_WORDS for w in words):
         return True
     return False
 
@@ -144,18 +174,18 @@ def _top_job_phrases(job_text: str, resume_text: str, top_k: int = 40) -> List[s
     return out[:top_k]
 
 def _sem_not_covered(phrases: List[str], resume_text: str, thr: float = 0.78) -> List[str]:
+    """Return phrases not covered by ANY sentence in the resume (sentence-level comparison)."""
     if not phrases:
         return []
     model = get_emb()
-    res_vec = model.encode([resume_text], normalize_embeddings=True)[0]
+    sentences = [s.strip() for s in re.split(r'[.\n\r;]+', resume_text) if len(s.strip()) > 8]
+    if not sentences:
+        return phrases
+    sent_vecs = model.encode(sentences, normalize_embeddings=True)
     ph_vecs = model.encode(phrases, normalize_embeddings=True)
-    res_n = np.linalg.norm(res_vec) + 1e-12
-    keep = []
-    for p, v in zip(phrases, ph_vecs):
-        sim = float(np.dot(v, res_vec) / ((np.linalg.norm(v) + 1e-12) * res_n))
-        if sim < thr:
-            keep.append(p)
-    return keep
+    # (n_phrases, n_sentences) — keep phrase if its best sentence match is below threshold
+    sims = ph_vecs @ sent_vecs.T
+    return [p for p, row in zip(phrases, sims) if float(row.max()) < thr]
 
 def _cluster_themes(phrases: List[str], max_k: int = 4) -> Dict[str, List[str]]:
     if not phrases:
@@ -203,15 +233,7 @@ def _unsafe_family_for_phrase(phrase: str, resume_text_norm: str) -> bool:
 
     return False
 
-def _expand_to_canon(terms: List[str]) -> List[str]:
-    if not terms:
-        return []
-    model = get_emb()
-    e_can = model.encode(CANON_SKILLS, normalize_embeddings=True)
-    e_terms = model.encode(terms, normalize_embeddings=True)
-    sims = util.cos_sim(e_terms, e_can)
-    picked = {CANON_SKILLS[int(sims[i].argmax())] for i in range(len(terms))}
-    return sorted(picked)
+
 
 def _extract_action_verbs(text: str):
     """
@@ -400,14 +422,21 @@ def smart_predict_resume_improvements(resume_text: str, job_text: str, job_title
     sim_rj = float(np.dot(r_vec, j_vec))
     sim_rt = float(np.dot(r_vec, t_vec)) if t_vec is not None else 0.0
 
-    jd_terms  = list(dict.fromkeys(_keybert_terms(j) + _tfidf_terms(j, r)))
-    jd_skills = _expand_to_canon(jd_terms)
+    # Use raw JD terms so results reflect the actual job's domain (not a fixed tech taxonomy)
+    raw_terms = list(dict.fromkeys(_keybert_terms(j) + _tfidf_terms(j, r)))
+    jd_terms = [t for t in raw_terms if not _is_noisy_phrase(t)][:40]
 
-    present, missing = [], []
-    for s in jd_skills:
-        (present if s in r else missing).append(s)
+    # Text match first (fast, reliable for exact terms like "python", "sql")
+    text_present = [t for t in jd_terms if _has_term(r, t)]
+    text_missing = [t for t in jd_terms if not _has_term(r, t)]
 
-    # Batch encode all missing skills once instead of calling _sim() per skill
+    # Semantic check on the remainder only — catches synonyms ("ml" vs "machine learning")
+    sem_missing = set(_sem_not_covered(text_missing, r, thr=0.72))
+    sem_present = [t for t in text_missing if t not in sem_missing]
+
+    present = text_present + sem_present
+    missing = list(sem_missing)
+
     if missing:
         skill_vecs = model.encode(missing, normalize_embeddings=True)
         sims_j = skill_vecs @ j_vec

@@ -155,19 +155,15 @@ export default function ResumeConstructor() {
         setLoading(true);
         setError(null);
         try {
-            const { analysis, profile: refreshedProfile } = await smartAnalyze({
+            const analysis = await smartAnalyze({
                 resumeText: rawResume,
                 jobText,
                 jobTitle,
             });
 
-            // Refresh credits/profile
-            if (refreshedProfile) {
-                setMe(refreshedProfile);
-            } else {
-                const latest = await getMe().catch(() => null);
-                if (latest) setMe(latest);
-            }
+            // Refresh credits after deduction
+            const latest = await getMe().catch(() => null);
+            if (latest) setMe(latest);
 
             // Build resume view
             const structured = parseResume(rawResume);

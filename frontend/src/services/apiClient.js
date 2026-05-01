@@ -61,33 +61,36 @@ export async function smartAnalyze({ resumeText, jobText, jobTitle }) {
   const headers = await authHeaders();
   const res = await fetch(`${API_BASE}/smart/analyze`, {
     method: "POST",
-        headers: {
-      ...headers,
-      "Content-Type": "application/json",  
-      "Accept": "application/json"
-    },
-  
+    headers: { ...headers, "Content-Type": "application/json", "Accept": "application/json" },
     body: JSON.stringify({ resume_text: resumeText, job_text: jobText, job_title: jobTitle })
   });
 
   let analysis;
-  try {
-    analysis = await res.json();
-  } catch {
-    analysis = null;
-  }
+  try { analysis = await res.json(); } catch { analysis = null; }
   if (!res.ok) throw new Error((analysis && (analysis.error || analysis.message)) || `Smart analysis failed (${res.status})`);
 
-  const payload = (analysis && (analysis.data || analysis.result || analysis.analysis)) || analysis || null;
+  return analysis || null;
+}
 
-  let profile = null;
-  try {
-    profile = await getMe();
-  } catch (e) {
-    console.debug("getMe after analyze failed", e);
-  }
+export async function smartEnrich({ resumeText, jobText, jobTitle, presentSkills, missingSkills, criticalGaps }) {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_BASE}/smart/enrich`, {
+    method: "POST",
+    headers: { ...headers, "Content-Type": "application/json", "Accept": "application/json" },
+    body: JSON.stringify({
+      resume_text: resumeText,
+      job_text: jobText,
+      job_title: jobTitle,
+      present_skills: presentSkills,
+      missing_skills: missingSkills,
+      critical_gaps: criticalGaps,
+    })
+  });
 
-  return { analysis: payload, profile };
+  let data;
+  try { data = await res.json(); } catch { data = null; }
+  if (!res.ok) throw new Error((data && (data.error || data.message)) || `Enrich failed (${res.status})`);
+  return data || null;
 }
 
 
