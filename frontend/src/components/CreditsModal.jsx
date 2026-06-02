@@ -1,10 +1,14 @@
 import React, { useEffect, useState } from "react";
-import { createCheckoutSession } from "../services/apiClient.js";
+import { createCheckoutSession, redeemPromoCode } from "../services/apiClient.js";
 
 export default function CreditsModal({ onClose, hasSubscription = false }) {
   const [processing, setProcessing] = useState(false);
   const [msg, setMsg] = useState("");
   const [customCredits, setCustomCredits] = useState(10);
+  const [promoCode, setPromoCode] = useState("");
+  const [promoProcessing, setPromoProcessing] = useState(false);
+  const [promoMsg, setPromoMsg] = useState("");
+  const [promoSuccess, setPromoSuccess] = useState(false);
 
   useEffect(() => {
     function onKey(e) {
@@ -41,6 +45,24 @@ export default function CreditsModal({ onClose, hasSubscription = false }) {
       setMsg(err?.message || "Could not start checkout");
     } finally {
       setProcessing(false);
+    }
+  }
+
+  async function handleRedeemPromo() {
+    if (!promoCode.trim()) return;
+    setPromoProcessing(true);
+    setPromoMsg("");
+    setPromoSuccess(false);
+    try {
+      const data = await redeemPromoCode(promoCode.trim());
+      setPromoSuccess(true);
+      setPromoMsg(data.message || "1 free credit added!");
+      setPromoCode("");
+      window.dispatchEvent(new CustomEvent("profile_updated"));
+    } catch (err) {
+      setPromoMsg(err?.message || "Could not redeem code");
+    } finally {
+      setPromoProcessing(false);
     }
   }
 
@@ -149,6 +171,36 @@ export default function CreditsModal({ onClose, hasSubscription = false }) {
             >
               {processing ? "Processing…" : `Buy ${customCredits} Credits for $${customCredits}`}
             </button>
+          </div>
+
+          {/* Promo Code */}
+          <div className="rounded-xl border p-4 sm:p-6">
+            <div className="text-center">
+              <div className="text-base sm:text-lg font-medium">Have a Promo Code?</div>
+              <div className="text-xs sm:text-sm text-gray-500 mt-1">Enter your code to claim a free credit</div>
+            </div>
+            <div className="mt-3 sm:mt-4 flex gap-2">
+              <input
+                type="text"
+                value={promoCode}
+                onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
+                onKeyDown={(e) => e.key === "Enter" && handleRedeemPromo()}
+                placeholder="Enter promo code"
+                className="flex-1 border rounded-lg px-3 py-2 text-sm uppercase tracking-widest"
+              />
+              <button
+                onClick={handleRedeemPromo}
+                disabled={promoProcessing || !promoCode.trim()}
+                className="rounded-lg bg-green-600 text-white px-4 py-2 text-sm font-semibold disabled:opacity-60 hover:bg-green-700 flex-shrink-0"
+              >
+                {promoProcessing ? "..." : "Apply"}
+              </button>
+            </div>
+            {promoMsg && (
+              <p className={`mt-2 text-sm ${promoSuccess ? "text-green-700" : "text-red-700"}`}>
+                {promoMsg}
+              </p>
+            )}
           </div>
 
           {msg && (

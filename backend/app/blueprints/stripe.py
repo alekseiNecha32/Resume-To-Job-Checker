@@ -495,6 +495,69 @@ def sync_subscription():
         return jsonify({"error": "internal_error"}), 500
 
 
+@stripe_bp.post("/redeem-promo")
+def redeem_promo():
+    """
+    Redeem a promo code for 3 free credits.
+    Body: { code: string }
+    Valid codes are set via PROMO_CODES env var (comma-separated),
+    Each user can redeem each code only once.
+    """
+    user_id = _resolve_user_id(request)
+    if not user_id:
+        return jsonify({"error": "unauthorized", "message": "Please log in to redeem a promo code"}), 401
+
+    body = request.get_json(silent=True) or {}
+    code = (body.get("code") or "").strip().upper()
+
+    if not code:
+        return jsonify({"error": "missing_code", "message": "Enter a promo code"}), 400
+    if len(code) > 50:
+        return jsonify({"error": "invalid_code", "message": "Invalid promo code"}), 400
+
+    raw_codes = os.getenv("PROMO_CODES", "")
+    valid_codes = {c.strip().upper() for c in raw_codes.split(",") if c.strip()}
+
+    if not valid_codes:
+        return jsonify({"error": "no_codes_configured", "message": "No promo codes are active right now"}), 400
+
+    if code not in valid_codes:
+        return jsonify({"error": "invalid_code", "message": "Invalid promo code"}), 400
+
+    if not SUPABASE:
+        return jsonify({"error": "database_not_configured"}), 501
+
+    try:
+        res = SUPABASE.table("promo_redemptions").select("id").eq("user_id", user_id).eq("code", code).limit(1).execute()
+        already = getattr(res, "data", None) or (res.get("data") if isinstance(res, dict) else None)
+        if already:
+            return jsonify({"error": "already_redeemed", "message": "You've already used this promo code"}), 400
+    except Exception:
+        current_app.logger.exception("Failed to check promo redemption")
+        return jsonify({"error": "internal_error"}), 500
+
+    try:
+        profile_check = SUPABASE.table("profiles").select("user_id").eq("user_id", user_id).execute()
+        profile_data = getattr(profile_check, "data", None) or (profile_check.get("data") if isinstance(profile_check, dict) else None)
+        if not profile_data:
+            SUPABASE.table("profiles").insert({"user_id": user_id, "credits": 0}).execute()
+    except Exception:
+        pass
+
+    try:
+        SUPABASE.table("promo_redemptions").insert({"user_id": user_id, "code": code}).execute()
+    except Exception:
+        current_app.logger.exception("Failed to record promo redemption")
+        return jsonify({"error": "internal_error"}), 500
+
+    promo_id = f"promo_{code}_{user_id}"
+    ok = _grant_credits(user_id, 3, promo_id, 0, "PROMO_CODE")
+    if not ok:
+        return jsonify({"error": "grant_failed", "message": "Could not apply credit, please contact support"}), 500
+
+    return jsonify({"ok": True, "message": "3 free credits added to your account!"}), 200
+
+
 @stripe_bp.post("/subscription/reactivate")
 def reactivate_subscription():
     """Reactivate a subscription that was set to cancel at period end."""

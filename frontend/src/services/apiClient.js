@@ -258,6 +258,18 @@ export async function reactivateSubscription() {
   return data;
 }
 
+export async function redeemPromoCode(code) {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_BASE}/payments/redeem-promo`, {
+    method: "POST",
+    headers: { ...headers, "Content-Type": "application/json" },
+    body: JSON.stringify({ code }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.message || data?.error || `Failed to redeem code (${res.status})`);
+  return data;
+}
+
 export async function syncSubscription(sessionId) {
   const headers = await authHeaders();
   const res = await fetch(`${API_BASE}/payments/subscription/sync`, {
