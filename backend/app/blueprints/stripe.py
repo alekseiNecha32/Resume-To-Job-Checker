@@ -498,7 +498,7 @@ def sync_subscription():
 @stripe_bp.post("/redeem-promo")
 def redeem_promo():
     """
-    Redeem a promo code for 3 free credits.
+    Redeem a promo code for 1 free credit.
     Body: { code: string }
     Valid codes are set via PROMO_CODES env var (comma-separated),
     Each user can redeem each code only once.
@@ -551,11 +551,11 @@ def redeem_promo():
         return jsonify({"error": "internal_error"}), 500
 
     promo_id = f"promo_{code}_{user_id}"
-    ok = _grant_credits(user_id, 3, promo_id, 0, "PROMO_CODE")
+    ok = _grant_credits(user_id, 1, promo_id, 0, "PROMO_CODE")
     if not ok:
         return jsonify({"error": "grant_failed", "message": "Could not apply credit, please contact support"}), 500
 
-    return jsonify({"ok": True, "message": "3 free credits added to your account!"}), 200
+    return jsonify({"ok": True, "message": "1 free credit added to your account!"}), 200
 
 
 @stripe_bp.post("/subscription/reactivate")
